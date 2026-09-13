@@ -38,7 +38,21 @@ const log = reactive<{ id: string; text: string; kind: "in" | "out" | "system" }
 
 /** chat display name -> jid, learned from every incoming SSE message so
  * voice commands can say "balas ke budi" instead of a raw JID. */
-const knownChats = reactive(new Map<string, { jid: string; lastText: string }>());
+interface ChatEntry {
+  jid: string;
+  messages: string[]; // oldest first, capped — enough for "cek pesan di grup ini"
+}
+const HISTORY_PER_CHAT = 10;
+const knownChats = reactive(new Map<string, ChatEntry>());
+
+function appendChatMessage(name: string, jid: string, text: string) {
+  const key = name.toLowerCase();
+  const entry = knownChats.get(key) ?? { jid, messages: [] };
+  entry.jid = jid;
+  entry.messages.push(text);
+  if (entry.messages.length > HISTORY_PER_CHAT) entry.messages.shift();
+  knownChats.set(key, entry);
+}
 
 let unlistenMessage: (() => void) | null = null;
 let unlistenStatus: (() => void) | null = null;
@@ -54,10 +68,11 @@ function pushLog(text: string, kind: "in" | "out" | "system") {
   if (log.length > 200) log.shift();
 }
 
-/** Primes knownChats/log from waxum's stored history — without this, the
- * app starts blank and only ever "sees" messages that arrive after it
- * happens to be open, so anything asked about past messages comes back
- * empty even though waxum has been logging them the whole time. */
+/** Primes knownChats from waxum's stored history — silently, as context
+ * for voice/AI commands ("cek pesan di grup ini") and contact resolution.
+ * Deliberately NOT pushed into the visible log: the screen only ever
+ * shows live messages and things explicitly asked for, not a full history
+ * dump on every launch. */
 async function loadHistory() {
   if (historyLoaded) return;
   const s = settings.value!;
@@ -69,8 +84,7 @@ async function loadHistory() {
       seenMessageIds.add(m.message_id);
       const name = m.push_name || m.chat_jid.split("@")[0];
       const text = m.body || `[${m.msg_type}]`;
-      knownChats.set(name.toLowerCase(), { jid: m.chat_jid, lastText: text });
-      pushLog(`${name}: ${text}`, m.direction === "out" ? "out" : "in");
+      appendChatMessage(name, m.chat_jid, text);
     }
     historyLoaded = true;
   } catch (e) {
@@ -161,7 +175,7 @@ async function handleIncoming(msg: IncomingMessage) {
   seenMessageIds.add(msg.data.message_id);
   const name = chatDisplayName(msg);
   const text = msg.data.text || msg.data.caption || `[${msg.data.message_type}]`;
-  knownChats.set(name.toLowerCase(), { jid: msg.data.chat, lastText: text });
+  appendChatMessage(name, msg.data.chat, text);
   pushLog(`${name}: ${text}`, "in");
 
   if (settings.value?.autoReadIncoming) {
@@ -171,7 +185,7 @@ async function handleIncoming(msg: IncomingMessage) {
   }
 }
 
-function resolveChat(spokenName: string): { jid: string; lastText: string } | undefined {
+function resolveChat(spokenName: string): ChatEntry | undefined {
   const key = spokenName.trim().toLowerCase();
   if (knownChats.has(key)) return knownChats.get(key);
   for (const [name, entry] of knownChats) {
@@ -193,7 +207,7 @@ async function onTranscript(raw: string) {
         await speak(s, "Tidak ada pesan yang sesuai dalam basis data.");
         break;
       }
-      await speak(s, entry.lastText);
+      await speak(s, entry.messages.at(-1) ?? "Tidak ada isi pesan.");
       break;
     }
     case "send_message": {
@@ -233,8 +247,9 @@ async function handleWithAi(s: Settings, transcript: string) {
     return;
   }
   const context =
-    [...knownChats.entries()].map(([name, e]) => `${name}: ${e.lastText}`).join("\n") ||
-    "(belum ada percakapan tercatat)";
+    [...knownChats.entries()]
+      .map(([name, e]) => `## ${name}\n${e.messages.join("\n")}`)
+      .join("\n\n") || "(belum ada percakapan tercatat)";
 
   try {
     const decision = await aiInterpret(s, transcript, context);

@@ -28,7 +28,7 @@ pub async fn interpret(
         "Kamu adalah Waxum Agent, asisten suara robotik untuk WhatsApp. Jawab selalu dalam \
          Bahasa Indonesia yang formal dan ringkas, gaya seperti AI asisten (mirip Jarvis) -- \
          tegas, tanpa basa-basi, tanpa emoji.\n\n\
-         Konteks percakapan yang diketahui (nama: pesan terakhir):\n{context}\n\n\
+         Konteks percakapan yang diketahui (riwayat beberapa pesan terakhir per kontak/grup):\n{context}\n\n\
          Balas HANYA dengan satu objek JSON, tanpa markdown, tanpa teks lain, persis bentuk ini:\n\
          {{\"action\": \"send_message\" atau \"none\", \"to\": \"<nama kontak dari konteks di atas, atau string kosong>\", \"text\": \"<isi pesan yang akan dikirim, atau string kosong>\", \"reply\": \"<balasan lisan singkat, selalu diisi>\"}}\n\n\
          Set action ke \"send_message\" hanya jika pengguna secara eksplisit minta mengirim/membalas pesan ke seseorang yang ada di konteks. \
