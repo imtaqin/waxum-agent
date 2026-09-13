@@ -37,7 +37,7 @@ function pushLog(text: string, kind: "in" | "out" | "system") {
 async function boot() {
   settings.value = await loadSettings();
   const s = settings.value;
-  const configured = s.token && s.sessionId && (s.mode === "remote" ? s.baseUrl : s.bundledBinaryPath);
+  const configured = s.token && s.sessionId && (s.mode === "remote" ? s.baseUrl : true);
   showSettings.value = !configured;
   ready.value = true;
   if (configured) await connect();
@@ -48,10 +48,21 @@ async function connect() {
   busy.value = true;
   statusLine.value = "connecting…";
   try {
-    if (s.mode === "bundled" && s.bundledBinaryPath) {
+    if (s.mode === "bundled") {
       const running = await invoke<boolean>("bundled_is_running");
       if (!running) {
-        await invoke("bundled_start", { binaryPath: s.bundledBinaryPath, port: 3451, env: [] });
+        statusLine.value = s.bundledBinaryPath
+          ? "starting bundled waxum…"
+          : "downloading waxum binary…";
+        const resolvedPath = await invoke<string>("bundled_start", {
+          binaryPath: s.bundledBinaryPath,
+          port: 3451,
+          env: [],
+        });
+        if (resolvedPath !== s.bundledBinaryPath) {
+          s.bundledBinaryPath = resolvedPath;
+          await saveSettings(s);
+        }
         await new Promise((r) => setTimeout(r, 1500));
       }
     }

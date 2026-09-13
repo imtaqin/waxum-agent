@@ -5,7 +5,7 @@ use tauri::{AppHandle, State};
 
 use crate::error::AppResult;
 use crate::state::AppState;
-use crate::{bundled, elevenlabs, events, waxum};
+use crate::{bundled, download, elevenlabs, events, waxum};
 
 #[tauri::command]
 pub async fn waxum_status(
@@ -93,14 +93,34 @@ pub async fn elevenlabs_check(api_key: String) -> AppResult<serde_json::Value> {
     elevenlabs::check_subscription(&api_key).await
 }
 
+/// Starts the bundled waxum process. When `binary_path` is empty, auto
+/// downloads the latest release for this OS/arch first — "bundled mode"
+/// should not require the user to go find a binary themselves.
 #[tauri::command]
 pub async fn bundled_start(
+    app: AppHandle,
     state: State<'_, AppState>,
     binary_path: String,
     port: u16,
     env: Vec<(String, String)>,
-) -> AppResult<()> {
-    bundled::start(&binary_path, port, env, &state.bundled_child).await
+) -> AppResult<String> {
+    let resolved = if binary_path.trim().is_empty() {
+        download::ensure_binary(&app).await?
+    } else {
+        binary_path
+    };
+    bundled::start(&resolved, port, env, &state.bundled_child).await?;
+    Ok(resolved)
+}
+
+#[tauri::command]
+pub async fn bundled_ensure_binary(app: AppHandle) -> AppResult<String> {
+    download::ensure_binary(&app).await
+}
+
+#[tauri::command]
+pub async fn bundled_update_binary(app: AppHandle) -> AppResult<String> {
+    download::download_latest_forced(&app).await
 }
 
 #[tauri::command]

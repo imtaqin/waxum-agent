@@ -30,6 +30,9 @@ futures-util = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 base64 = "0.22"
 thiserror = "2"
+flate2 = "1"
+tar = "0.4"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

@@ -1,5 +1,6 @@
 mod bundled;
 mod commands;
+mod download;
 mod elevenlabs;
 mod error;
 mod events;
@@ -29,6 +30,8 @@ pub fn run() {
             commands::bundled_start,
             commands::bundled_stop,
             commands::bundled_is_running,
+            commands::bundled_ensure_binary,
+            commands::bundled_update_binary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

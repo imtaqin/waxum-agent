@@ -14,6 +14,23 @@ const testing = ref(false);
 const testResult = ref<string | null>(null);
 const sessions = ref<SessionSummary[]>([]);
 const pickingBinary = ref(false);
+const downloading = ref(false);
+
+async function downloadNow() {
+  downloading.value = true;
+  testResult.value = null;
+  try {
+    const path = await invoke<string>(
+      form.value.bundledBinaryPath ? "bundled_update_binary" : "bundled_ensure_binary",
+    );
+    form.value.bundledBinaryPath = path;
+    testResult.value = `downloaded to ${path}`;
+  } catch (e) {
+    testResult.value = `download failed: ${e}`;
+  } finally {
+    downloading.value = false;
+  }
+}
 
 async function testWaxum() {
   testing.value = true;
@@ -97,10 +114,17 @@ function save() {
         <label class="flex flex-col gap-1">
           <span class="text-[11px] uppercase tracking-wide text-white/40">waxum binary path</span>
           <div class="flex gap-2">
-            <input v-model="form.bundledBinaryPath" class="input" placeholder="/usr/local/bin/waxum" />
+            <input v-model="form.bundledBinaryPath" class="input" placeholder="leave empty to auto-download" />
             <button class="btn-ghost shrink-0" :disabled="pickingBinary" @click="pickBinaryPath">Browse</button>
           </div>
+          <p class="text-[11px] text-white/30">
+            Leave empty and waxum agent downloads the latest waxum release
+            for your OS automatically the first time it connects.
+          </p>
         </label>
+        <button class="btn-ghost" :disabled="downloading" @click="downloadNow">
+          {{ downloading ? "Downloading…" : form.bundledBinaryPath ? "Re-download / update binary" : "Download waxum now" }}
+        </button>
         <label class="flex flex-col gap-1">
           <span class="text-[11px] uppercase tracking-wide text-white/40">local port</span>
           <input v-model="form.baseUrl" class="input" placeholder="http://127.0.0.1:3451/api/v1" />
