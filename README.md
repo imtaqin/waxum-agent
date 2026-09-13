@@ -55,7 +55,7 @@ npm run tauri dev      # desktop
 On first launch you land on the settings screen:
 
 - **Remote URL mode** — waxum base URL (e.g. `https://waxum-api.example.com/api/v1`) + bearer token + session id.
-- **Bundled binary mode** — path to a local `waxum` binary; the app spawns it on `127.0.0.1:3451` and talks to that.
+- **Bundled binary mode** — leave the path empty and it auto-downloads the latest [waxum release](https://github.com/imtaqin/waxum/releases) for your OS/arch (linux-amd64/arm64, windows-amd64) into the app data dir and spawns it on `127.0.0.1:3451`; point it at your own binary instead if you'd rather not auto-download.
 - ElevenLabs API key + voice id (defaults to voice `21m00Tcm4TlvDq8ikWAM` — swap for your own).
 
 Both connections have a "Test" button before you save.
