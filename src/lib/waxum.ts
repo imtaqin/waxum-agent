@@ -46,6 +46,28 @@ export function waxumSearch(s: Settings, query: string) {
   });
 }
 
+export function startPairing(base: { baseUrl: string; token: string }, sessionId: string, timeoutSeconds = 180) {
+  return invoke<void>("waxum_start_pairing", {
+    baseUrl: base.baseUrl,
+    token: base.token,
+    sessionId,
+    timeoutSeconds,
+  });
+}
+
+export function stopPairing() {
+  return invoke<void>("waxum_stop_pairing");
+}
+
+export interface PairingEvent {
+  event: "qr_code" | "pair_code" | "connected" | "ready" | "error" | "timeout";
+  data: any;
+}
+
+export function onPairingEvent(cb: (e: PairingEvent) => void): Promise<UnlistenFn> {
+  return listen<PairingEvent>("waxum-agent://pairing", (e) => cb(e.payload));
+}
+
 export function startEventStream(s: Settings) {
   return invoke<void>("waxum_start_events", {
     baseUrl: s.baseUrl,

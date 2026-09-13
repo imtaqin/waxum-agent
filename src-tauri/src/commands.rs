@@ -5,7 +5,7 @@ use tauri::{AppHandle, State};
 
 use crate::error::AppResult;
 use crate::state::AppState;
-use crate::{bundled, download, elevenlabs, events, waxum};
+use crate::{bundled, download, elevenlabs, events, pairing, waxum};
 
 #[tauri::command]
 pub async fn waxum_status(
@@ -96,6 +96,25 @@ pub async fn elevenlabs_check(api_key: String) -> AppResult<serde_json::Value> {
 /// Starts the bundled waxum process. When `binary_path` is empty, auto
 /// downloads the latest release for this OS/arch first — "bundled mode"
 /// should not require the user to go find a binary themselves.
+#[tauri::command]
+pub async fn waxum_start_pairing(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    base_url: String,
+    token: String,
+    session_id: String,
+    timeout_seconds: u64,
+) -> AppResult<()> {
+    pairing::start(app, state, base_url, token, session_id, timeout_seconds).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn waxum_stop_pairing(state: State<'_, AppState>) -> AppResult<()> {
+    pairing::stop(state).await;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn bundled_start(
     app: AppHandle,

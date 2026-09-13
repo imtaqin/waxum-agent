@@ -4,6 +4,7 @@ mod download;
 mod elevenlabs;
 mod error;
 mod events;
+mod pairing;
 mod state;
 mod waxum;
 
@@ -24,6 +25,8 @@ pub fn run() {
             commands::waxum_search,
             commands::waxum_start_events,
             commands::waxum_stop_events,
+            commands::waxum_start_pairing,
+            commands::waxum_stop_pairing,
             commands::tts_speak,
             commands::stt_transcribe,
             commands::elevenlabs_check,
