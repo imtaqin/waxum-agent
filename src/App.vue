@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import SetupView from "./components/SetupView.vue";
 import VoiceBar from "./components/VoiceBar.vue";
+import PairingModal from "./components/PairingModal.vue";
 import { loadSettings, saveSettings } from "./lib/settings";
 import type { IncomingMessage, Settings } from "./lib/types";
 import {
@@ -11,6 +12,7 @@ import {
   startEventStream,
   stopEventStream,
   waxumSendText,
+  waxumStatus,
 } from "./lib/waxum";
 import { speak } from "./lib/voice";
 import { parseCommand } from "./lib/commandParser";
@@ -20,6 +22,8 @@ const settings = ref<Settings | null>(null);
 const showSettings = ref(false);
 const busy = ref(false);
 const statusLine = ref("");
+const sessionReady = ref(false);
+const showPairing = ref(false);
 const log = reactive<{ id: string; text: string; kind: "in" | "out" | "system" }[]>([]);
 
 /** chat display name -> jid, learned from every incoming SSE message so
@@ -67,13 +71,35 @@ async function connect() {
       }
     }
     await startEventStream(s);
-    statusLine.value = "connected — listening for messages";
-    pushLog(`connected to session ${s.sessionId}`, "system");
+    await refreshSessionStatus();
   } catch (e) {
     statusLine.value = `connection failed: ${e}`;
+    sessionReady.value = false;
   } finally {
     busy.value = false;
   }
+}
+
+/** Checks the actual waxum session status — a live SSE stream and a
+ * "connect succeeded" toast mean nothing if the session was never paired,
+ * so this is the only thing allowed to claim "connected". */
+async function refreshSessionStatus() {
+  const s = settings.value!;
+  try {
+    const status = await waxumStatus(s);
+    sessionReady.value = status.status === "logged_in";
+    statusLine.value = sessionReady.value
+      ? "connected — listening for messages"
+      : `session not paired yet (status: ${status.status ?? "unknown"})`;
+  } catch (e) {
+    sessionReady.value = false;
+    statusLine.value = `couldn't check session status: ${e}`;
+  }
+}
+
+function onPairedFromMain() {
+  showPairing.value = false;
+  refreshSessionStatus();
 }
 
 async function onSaveSettings(s: Settings) {
@@ -189,7 +215,16 @@ onUnmounted(() => {
       </button>
     </header>
 
-    <div class="px-4 py-1.5 text-[11px] text-white/40 border-b border-white/5">{{ statusLine }}</div>
+    <div class="px-4 py-1.5 text-[11px] border-b border-white/5" :class="sessionReady ? 'text-white/40' : 'text-amber-400'">
+      {{ statusLine }}
+    </div>
+
+    <div v-if="!sessionReady" class="mx-4 mt-3 card p-3 flex items-center justify-between gap-3">
+      <p class="text-xs text-white/60">
+        This session isn't paired yet — scan a QR to link WhatsApp before sending or reading messages.
+      </p>
+      <button class="btn-primary shrink-0 text-xs" @click="showPairing = true">Pair now</button>
+    </div>
 
     <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
       <div
@@ -203,11 +238,23 @@ onUnmounted(() => {
         }">
         {{ entry.text }}
       </div>
-      <p v-if="log.length === 0" class="text-center text-white/30 text-sm mt-8">
+      <p v-if="log.length === 0 && sessionReady" class="text-center text-white/30 text-sm mt-8">
         Belum ada pesan. Coba bilang "baca pesan" atau "balas ke [nama] bilang [isi]" sambil tahan tombol mic.
       </p>
     </main>
 
-    <VoiceBar :settings="settings!" :busy="busy" @transcript="onTranscript" @error="(e) => pushLog(e, 'system')" />
+    <VoiceBar
+      :settings="settings!"
+      :busy="busy || !sessionReady"
+      @transcript="onTranscript"
+      @error="(e) => pushLog(e, 'system')" />
+
+    <PairingModal
+      v-if="showPairing"
+      :base-url="settings!.baseUrl"
+      :token="settings!.token"
+      :session-id="settings!.sessionId"
+      @close="showPairing = false"
+      @paired="onPairedFromMain" />
   </div>
 </template>
