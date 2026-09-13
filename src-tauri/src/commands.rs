@@ -57,6 +57,16 @@ pub async fn waxum_session_messages(
 }
 
 #[tauri::command]
+pub async fn waxum_group_info(
+    base_url: String,
+    token: String,
+    session_id: String,
+    group_jid: String,
+) -> AppResult<serde_json::Value> {
+    waxum::group_info(&base_url, &token, &session_id, &group_jid).await
+}
+
+#[tauri::command]
 pub async fn waxum_search(
     base_url: String,
     token: String,

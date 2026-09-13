@@ -11,6 +11,7 @@ import {
   onStreamStatus,
   startEventStream,
   stopEventStream,
+  waxumGroupInfo,
   waxumSendText,
   waxumSessionMessages,
   waxumStatus,
@@ -54,6 +55,25 @@ function appendChatMessage(name: string, jid: string, text: string) {
   knownChats.set(key, entry);
 }
 
+/** group jid -> subject, so a group's context/log entries are keyed by
+ * "the group" rather than whichever member happened to send last. */
+const groupNames = new Map<string, string>();
+
+async function resolveGroupName(jid: string): Promise<string> {
+  const cached = groupNames.get(jid);
+  if (cached) return cached;
+  const fallback = `Grup ${jid.split("@")[0].slice(-6)}`;
+  try {
+    const info = await waxumGroupInfo(settings.value!, jid);
+    const name = info.subject?.trim() || fallback;
+    groupNames.set(jid, name);
+    return name;
+  } catch {
+    groupNames.set(jid, fallback);
+    return fallback;
+  }
+}
+
 let unlistenMessage: (() => void) | null = null;
 let unlistenStatus: (() => void) | null = null;
 
@@ -82,9 +102,16 @@ async function loadHistory() {
     for (const m of messages) {
       if (seenMessageIds.has(m.message_id)) continue;
       seenMessageIds.add(m.message_id);
-      const name = m.push_name || m.chat_jid.split("@")[0];
       const text = m.body || `[${m.msg_type}]`;
-      appendChatMessage(name, m.chat_jid, text);
+      const isGroup = (m.chat_jid as string).endsWith("@g.us");
+      if (isGroup) {
+        const groupName = await resolveGroupName(m.chat_jid);
+        const sender = m.push_name || (m.sender_jid as string).split("@")[0];
+        appendChatMessage(groupName, m.chat_jid, `${sender}: ${text}`);
+      } else {
+        const name = m.push_name || (m.chat_jid as string).split("@")[0];
+        appendChatMessage(name, m.chat_jid, text);
+      }
     }
     historyLoaded = true;
   } catch (e) {
@@ -173,15 +200,24 @@ async function handleIncoming(msg: IncomingMessage) {
   if (msg.data.is_from_me) return;
   if (seenMessageIds.has(msg.data.message_id)) return;
   seenMessageIds.add(msg.data.message_id);
-  const name = chatDisplayName(msg);
+
+  const sender = chatDisplayName(msg);
   const text = msg.data.text || msg.data.caption || `[${msg.data.message_type}]`;
-  appendChatMessage(name, msg.data.chat, text);
-  pushLog(`${name}: ${text}`, "in");
+
+  let chatName = sender;
+  let logLine = `${sender}: ${text}`;
+  let spoken = `Pesan masuk dari ${sender}. ${text}`;
+  if (msg.data.is_group) {
+    chatName = await resolveGroupName(msg.data.chat);
+    logLine = `[${chatName}] ${sender}: ${text}`;
+    spoken = `Pesan masuk di grup ${chatName} dari ${sender}. ${text}`;
+  }
+
+  appendChatMessage(chatName, msg.data.chat, msg.data.is_group ? `${sender}: ${text}` : text);
+  pushLog(logLine, "in");
 
   if (settings.value?.autoReadIncoming) {
-    await speak(settings.value, `Pesan masuk dari ${name}. ${text}`).catch((e) =>
-      pushLog(`tts failed: ${e}`, "system"),
-    );
+    await speak(settings.value, spoken).catch((e) => pushLog(`tts failed: ${e}`, "system"));
   }
 }
 

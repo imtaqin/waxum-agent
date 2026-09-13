@@ -46,6 +46,15 @@ export function waxumChatMessages(s: Settings, chatJid: string, limit = 10) {
   });
 }
 
+export function waxumGroupInfo(s: Settings, groupJid: string) {
+  return invoke<any>("waxum_group_info", {
+    baseUrl: s.baseUrl,
+    token: s.token,
+    sessionId: s.sessionId,
+    groupJid,
+  });
+}
+
 export function waxumSearch(s: Settings, query: string) {
   return invoke<any>("waxum_search", {
     baseUrl: s.baseUrl,

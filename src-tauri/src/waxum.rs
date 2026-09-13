@@ -105,6 +105,24 @@ pub async fn session_messages(
     json_or_err(resp).await
 }
 
+/// Group subject (display name), used so a group's context/log entries are
+/// keyed by "the group" rather than whichever member happened to send the
+/// most recent message.
+pub async fn group_info(
+    base_url: &str,
+    token: &str,
+    session_id: &str,
+    group_jid: &str,
+) -> AppResult<Value> {
+    let url = format!(
+        "{}/sessions/{session_id}/groups/{}",
+        base_url.trim_end_matches('/'),
+        urlencoding_lite(group_jid)
+    );
+    let resp = auth(client().get(url), token).send().await?;
+    json_or_err(resp).await
+}
+
 pub async fn search_contact(
     base_url: &str,
     token: &str,
