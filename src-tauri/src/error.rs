@@ -10,8 +10,6 @@ pub enum AppError {
     Waxum(String),
     #[error("elevenlabs: {0}")]
     ElevenLabs(String),
-    #[error("config: {0}")]
-    Config(String),
     #[error("bundled binary: {0}")]
     Bundled(String),
     #[error(transparent)]
