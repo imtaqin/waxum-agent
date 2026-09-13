@@ -99,12 +99,12 @@ function save() {
   <div class="min-h-screen flex items-center justify-center p-6">
     <div class="card w-full max-w-sm p-6 flex flex-col gap-4">
       <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 text-sm font-bold">
+        <div class="w-8 h-8 rounded-full border border-hud-500/50 flex items-center justify-center text-hud-500 text-sm font-bold hud-glow-text">
           W
         </div>
         <div>
-          <div class="text-sm font-semibold">waxum agent</div>
-          <div class="text-xs text-white/40">voice-driven WhatsApp assistant</div>
+          <div class="text-sm font-semibold tracking-[0.2em] uppercase hud-glow-text">waxum // agent</div>
+          <div class="text-[10px] uppercase tracking-widest text-hud-400/40">voice interface — whatsapp control module</div>
         </div>
       </div>
 

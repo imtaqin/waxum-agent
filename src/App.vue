@@ -24,6 +24,14 @@ const busy = ref(false);
 const statusLine = ref("");
 const sessionReady = ref(false);
 const showPairing = ref(false);
+const typedCommand = ref("");
+
+function submitTyped() {
+  const text = typedCommand.value.trim();
+  if (!text) return;
+  typedCommand.value = "";
+  onTranscript(text);
+}
 const log = reactive<{ id: string; text: string; kind: "in" | "out" | "system" }[]>([]);
 
 /** chat display name -> jid, learned from every incoming SSE message so
@@ -122,7 +130,7 @@ async function handleIncoming(msg: IncomingMessage) {
   pushLog(`${name}: ${text}`, "in");
 
   if (settings.value?.autoReadIncoming) {
-    await speak(settings.value, `${name} bilang: ${text}`).catch((e) =>
+    await speak(settings.value, `Pesan masuk dari ${name}. ${text}`).catch((e) =>
       pushLog(`tts failed: ${e}`, "system"),
     );
   }
@@ -147,7 +155,7 @@ async function onTranscript(raw: string) {
     case "read_latest": {
       const entry = intent.from ? resolveChat(intent.from) : [...knownChats.values()].at(-1);
       if (!entry) {
-        await speak(s, "belum ada pesan yang cocok");
+        await speak(s, "Tidak ada pesan yang sesuai dalam basis data.");
         break;
       }
       await speak(s, entry.lastText);
@@ -156,26 +164,26 @@ async function onTranscript(raw: string) {
     case "send_message": {
       const entry = resolveChat(intent.to);
       if (!entry) {
-        await speak(s, `gak nemu kontak ${intent.to} di percakapan terbaru`);
+        await speak(s, `Kontak ${intent.to} tidak ditemukan dalam percakapan aktif.`);
         pushLog(`unresolved contact: "${intent.to}"`, "system");
         break;
       }
       try {
         await waxumSendText(s, entry.jid, intent.text);
         pushLog(`sent to ${intent.to}: ${intent.text}`, "system");
-        await speak(s, `oke, terkirim ke ${intent.to}`);
+        await speak(s, `Pesan telah dikirim kepada ${intent.to}.`);
       } catch (e) {
-        await speak(s, "gagal kirim pesan");
+        await speak(s, "Pengiriman pesan gagal.");
         pushLog(`send failed: ${e}`, "system");
       }
       break;
     }
     case "list_sessions":
-      await speak(s, `${knownChats.size} percakapan aktif`);
+      await speak(s, `${knownChats.size} percakapan aktif terdeteksi.`);
       break;
     case "unknown":
       pushLog(`unrecognized command: "${intent.raw}"`, "system");
-      await speak(s, "gak ngerti perintahnya");
+      await speak(s, "Perintah tidak dikenali.");
       break;
   }
 }
@@ -203,25 +211,29 @@ onUnmounted(() => {
     @save="onSaveSettings" />
 
   <div v-else class="h-screen flex flex-col">
-    <header class="flex items-center justify-between px-4 h-14 border-b border-white/10 shrink-0">
+    <header class="flex items-center justify-between px-4 h-14 border-b border-hud-500/20 shrink-0 bg-black/20">
       <div class="flex items-center gap-2">
-        <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 text-xs font-bold">
+        <div
+          class="w-7 h-7 rounded-full border border-hud-500/50 flex items-center justify-center text-hud-500 text-xs font-bold hud-glow-text"
+          :class="sessionReady ? 'hud-pulse' : ''">
           W
         </div>
-        <div class="text-sm font-semibold">waxum agent</div>
+        <div class="text-sm font-semibold tracking-[0.2em] uppercase hud-glow-text">waxum // agent</div>
       </div>
-      <button class="text-xs text-white/40 hover:text-white/70" @click="showSettings = true">
-        settings
+      <button class="text-[10px] uppercase tracking-widest text-hud-400/50 hover:text-hud-400" @click="showSettings = true">
+        config
       </button>
     </header>
 
-    <div class="px-4 py-1.5 text-[11px] border-b border-white/5" :class="sessionReady ? 'text-white/40' : 'text-amber-400'">
-      {{ statusLine }}
+    <div
+      class="px-4 py-1.5 text-[11px] border-b border-hud-500/10 uppercase tracking-wide"
+      :class="sessionReady ? 'text-hud-400/50' : 'text-amber-400'">
+      &gt; {{ statusLine }}
     </div>
 
     <div v-if="!sessionReady" class="mx-4 mt-3 card p-3 flex items-center justify-between gap-3">
-      <p class="text-xs text-white/60">
-        This session isn't paired yet — scan a QR to link WhatsApp before sending or reading messages.
+      <p class="text-xs text-hud-400/70">
+        Sesi belum tertaut. Pindai kode QR untuk mengaktifkan modul WhatsApp.
       </p>
       <button class="btn-primary shrink-0 text-xs" @click="showPairing = true">Pair now</button>
     </div>
@@ -230,18 +242,27 @@ onUnmounted(() => {
       <div
         v-for="entry in log"
         :key="entry.id"
-        class="max-w-[85%] px-3 py-2 rounded-xl text-sm"
+        class="max-w-[85%] px-3 py-2 rounded-xl text-sm font-mono"
         :class="{
-          'self-start card text-white/80': entry.kind === 'in',
-          'self-end bg-emerald-600 text-white': entry.kind === 'out',
-          'self-center text-[11px] text-white/30': entry.kind === 'system',
+          'self-start card text-hud-400/90': entry.kind === 'in',
+          'self-end bg-hud-600/70 text-charcoal-900 font-semibold': entry.kind === 'out',
+          'self-center text-[10px] uppercase tracking-wide text-hud-400/30': entry.kind === 'system',
         }">
         {{ entry.text }}
       </div>
-      <p v-if="log.length === 0 && sessionReady" class="text-center text-white/30 text-sm mt-8">
-        Belum ada pesan. Coba bilang "baca pesan" atau "balas ke [nama] bilang [isi]" sambil tahan tombol mic.
+      <p v-if="log.length === 0 && sessionReady" class="text-center text-hud-400/30 text-xs mt-8 uppercase tracking-wide">
+        Standby. Ucapkan "baca pesan" atau ketik perintah di bawah.
       </p>
     </main>
+
+    <form class="flex gap-2 px-4 pt-2" @submit.prevent="submitTyped">
+      <input
+        v-model="typedCommand"
+        class="input flex-1"
+        placeholder="ketik perintah…"
+        :disabled="!sessionReady" />
+      <button type="submit" class="btn-ghost shrink-0" :disabled="!sessionReady || !typedCommand.trim()">Send</button>
+    </form>
 
     <VoiceBar
       :settings="settings!"

@@ -7,28 +7,43 @@ html, body, #app {
 }
 
 body {
-  @apply bg-charcoal-900 text-white/90 font-sans antialiased;
+  @apply bg-charcoal-900 text-hud-400/90 font-mono antialiased;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.08), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.015) 0px, rgba(255, 255, 255, 0.015) 1px, transparent 1px, transparent 3px);
 }
 
 ::-webkit-scrollbar {
   width: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-white/10 rounded-full;
+  @apply bg-hud-500/20 rounded-full;
 }
 
 .card {
-  @apply bg-charcoal-800 border border-white/10 rounded-xl;
+  @apply bg-charcoal-800/90 border border-hud-500/20 rounded-xl shadow-hud;
 }
 
 .btn-primary {
-  @apply bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  @apply bg-hud-600/80 hover:bg-hud-500 text-charcoal-900 rounded-lg px-4 py-2 text-sm font-semibold uppercase tracking-wide transition-all disabled:opacity-30 disabled:pointer-events-none shadow-hud;
 }
 
 .btn-ghost {
-  @apply bg-white/5 hover:bg-white/10 text-white/80 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  @apply bg-hud-500/5 hover:bg-hud-500/15 text-hud-400/80 border border-hud-500/20 rounded-lg px-4 py-2 text-xs uppercase tracking-wide transition-colors disabled:opacity-30 disabled:pointer-events-none;
 }
 
 .input {
-  @apply w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500/50 placeholder:text-white/30;
+  @apply w-full bg-black/40 border border-hud-500/20 rounded-lg px-3 py-2 text-sm text-hud-400 outline-none focus:border-hud-500/60 focus:shadow-hud placeholder:text-hud-400/25 font-mono;
+}
+
+.hud-glow-text {
+  text-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
+}
+
+@keyframes hud-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4); }
+  50% { box-shadow: 0 0 0 12px rgba(34, 211, 238, 0); }
+}
+.hud-pulse {
+  animation: hud-pulse 1.6s ease-out infinite;
 }

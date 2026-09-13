@@ -8,7 +8,7 @@ const emit = defineEmits<{ close: []; paired: [] }>();
 
 const qrDataUrl = ref<string | null>(null);
 const pairCode = ref<string | null>(null);
-const statusText = ref("starting…");
+const statusText = ref("menginisialisasi…");
 const failed = ref(false);
 let unlisten: (() => void) | null = null;
 
@@ -20,20 +20,20 @@ onMounted(async () => {
   unlisten = await onPairingEvent(async (e) => {
     switch (e.event) {
       case "qr_code":
-        statusText.value = "scan this QR from WhatsApp > Linked devices";
+        statusText.value = "pindai kode ini di WhatsApp > Perangkat Tertaut";
         pairCode.value = null;
         await renderQr(e.data.code);
         break;
       case "pair_code":
-        statusText.value = "or enter this code in WhatsApp > Linked devices";
+        statusText.value = "masukkan kode ini di WhatsApp > Perangkat Tertaut";
         pairCode.value = e.data.code;
         qrDataUrl.value = null;
         break;
       case "connected":
-        statusText.value = "connected — finishing sync…";
+        statusText.value = "tertaut — menyinkronkan data…";
         break;
       case "ready":
-        statusText.value = "paired";
+        statusText.value = "modul aktif";
         emit("paired");
         break;
       case "error":
