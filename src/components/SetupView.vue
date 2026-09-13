@@ -6,6 +6,7 @@ import type { Settings } from "../lib/types";
 import { waxumStatus } from "../lib/waxum";
 import { aiInterpret } from "../lib/ai";
 import PairingModal from "./PairingModal.vue";
+import RadarRing from "./RadarRing.vue";
 
 const props = defineProps<{ modelValue: Settings }>();
 const emit = defineEmits<{ save: [Settings] }>();
@@ -113,9 +114,7 @@ function save() {
   <div class="min-h-screen flex items-center justify-center p-6">
     <div class="card w-full max-w-sm p-6 flex flex-col gap-4">
       <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-full border border-hud-500/50 flex items-center justify-center text-hud-500 text-sm font-bold hud-glow-text">
-          W
-        </div>
+        <RadarRing />
         <div>
           <div class="text-sm font-semibold tracking-[0.2em] uppercase hud-glow-text">waxum // agent</div>
           <div class="text-[10px] uppercase tracking-widest text-hud-400/40">voice interface — whatsapp control module</div>

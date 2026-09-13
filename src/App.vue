@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import SetupView from "./components/SetupView.vue";
 import VoiceBar from "./components/VoiceBar.vue";
 import PairingModal from "./components/PairingModal.vue";
+import RadarRing from "./components/RadarRing.vue";
+import LiveClock from "./components/LiveClock.vue";
 import { loadSettings, saveSettings } from "./lib/settings";
 import type { IncomingMessage, Settings } from "./lib/types";
 import {
@@ -333,19 +335,24 @@ onUnmounted(() => {
     :model-value="settings!"
     @save="onSaveSettings" />
 
-  <div v-else class="h-screen flex flex-col">
+  <div v-else class="h-screen flex flex-col hud-frame">
+    <span class="hud-corner-tr" />
+    <span class="hud-corner-br" />
+
     <header class="flex items-center justify-between px-4 h-14 border-b border-hud-500/20 shrink-0 bg-black/20">
       <div class="flex items-center gap-2">
-        <div
-          class="w-7 h-7 rounded-full border border-hud-500/50 flex items-center justify-center text-hud-500 text-xs font-bold hud-glow-text"
-          :class="sessionReady ? 'hud-pulse' : ''">
-          W
+        <RadarRing :active="sessionReady" />
+        <div>
+          <div class="text-sm font-semibold tracking-[0.2em] uppercase hud-glow-text">waxum // agent</div>
+          <div class="text-[9px] uppercase tracking-widest text-hud-400/30">jarvis-class voice interface</div>
         </div>
-        <div class="text-sm font-semibold tracking-[0.2em] uppercase hud-glow-text">waxum // agent</div>
       </div>
-      <button class="text-[10px] uppercase tracking-widest text-hud-400/50 hover:text-hud-400" @click="showSettings = true">
-        config
-      </button>
+      <div class="flex items-center gap-4">
+        <LiveClock />
+        <button class="text-[10px] uppercase tracking-widest text-hud-400/50 hover:text-hud-400" @click="showSettings = true">
+          config
+        </button>
+      </div>
     </header>
     <div class="cyber-line hud-flicker" />
 

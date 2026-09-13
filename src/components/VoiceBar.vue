@@ -11,6 +11,11 @@ const recording = ref(false);
 const transcribing = ref(false);
 let ptt: PushToTalk | null = null;
 
+// Decorative waveform — not driven by real mic amplitude, just a
+// staggered idle/pulse loop that reads as "listening" like the reference HUD.
+const BAR_COUNT = 9;
+const bars = Array.from({ length: BAR_COUNT }, (_, i) => i);
+
 async function press() {
   if (props.busy || recording.value) return;
   try {
@@ -40,6 +45,24 @@ async function release() {
 
 <template>
   <div class="flex flex-col items-center gap-2 p-4 border-t border-hud-500/20">
+    <div class="flex items-end gap-[3px] h-6">
+      <motion.div
+        v-for="i in bars"
+        :key="i"
+        class="w-[3px] rounded-full"
+        :class="recording ? 'bg-cyber-pink' : 'bg-hud-500/40'"
+        :animate="recording
+          ? { scaleY: [0.25, 1, 0.4, 0.85, 0.25] }
+          : { scaleY: [0.2, 0.4, 0.2] }"
+        :transition="{
+          duration: recording ? 0.7 : 2.2,
+          repeat: Infinity,
+          ease: 'easeInOut',
+          delay: i * 0.07,
+        }"
+        style="height: 24px; transform-origin: bottom" />
+    </div>
+
     <motion.button
       class="w-16 h-16 rounded-full flex items-center justify-center select-none border"
       :class="recording
