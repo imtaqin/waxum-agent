@@ -5,7 +5,7 @@ use tauri::{AppHandle, State};
 
 use crate::error::AppResult;
 use crate::state::AppState;
-use crate::{bundled, download, elevenlabs, events, pairing, waxum};
+use crate::{ai, bundled, download, elevenlabs, events, pairing, waxum};
 
 #[tauri::command]
 pub async fn waxum_status(
@@ -91,6 +91,17 @@ pub async fn stt_transcribe(
 #[tauri::command]
 pub async fn elevenlabs_check(api_key: String) -> AppResult<serde_json::Value> {
     elevenlabs::check_subscription(&api_key).await
+}
+
+#[tauri::command]
+pub async fn ai_interpret(
+    api_url: String,
+    api_key: String,
+    model: String,
+    transcript: String,
+    context: String,
+) -> AppResult<serde_json::Value> {
+    ai::interpret(&api_url, &api_key, &model, &transcript, &context).await
 }
 
 /// Starts the bundled waxum process. When `binary_path` is empty, auto

@@ -9,6 +9,9 @@ export interface Settings {
   elevenLabsApiKey: string;
   elevenLabsVoiceId: string;
   autoReadIncoming: boolean;
+  aiApiUrl: string;
+  aiApiKey: string;
+  aiModel: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,6 +24,9 @@ export const DEFAULT_SETTINGS: Settings = {
   elevenLabsVoiceId: "21m00Tcm4TlvDq8ikWAM",
   elevenLabsApiKey: "",
   autoReadIncoming: true,
+  aiApiUrl: "",
+  aiApiKey: "",
+  aiModel: "",
 };
 
 export interface SessionSummary {

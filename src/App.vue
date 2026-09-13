@@ -16,6 +16,7 @@ import {
 } from "./lib/waxum";
 import { speak } from "./lib/voice";
 import { parseCommand } from "./lib/commandParser";
+import { aiConfigured, aiInterpret } from "./lib/ai";
 
 const ready = ref(false);
 const settings = ref<Settings | null>(null);
@@ -182,9 +183,45 @@ async function onTranscript(raw: string) {
       await speak(s, `${knownChats.size} percakapan aktif terdeteksi.`);
       break;
     case "unknown":
-      pushLog(`unrecognized command: "${intent.raw}"`, "system");
-      await speak(s, "Perintah tidak dikenali.");
+      await handleWithAi(s, intent.raw);
       break;
+  }
+}
+
+/** Fallback for anything the fixed regex patterns don't cover — free-form
+ * questions like "halo ada pesan apa aja" have no fixed shape, so this
+ * hands the transcript plus known-chat context to the configured LLM and
+ * either executes the send it decides on or just speaks its reply. */
+async function handleWithAi(s: Settings, transcript: string) {
+  if (!aiConfigured(s)) {
+    pushLog(`unrecognized command: "${transcript}"`, "system");
+    await speak(s, "Perintah tidak dikenali.");
+    return;
+  }
+  const context =
+    [...knownChats.entries()].map(([name, e]) => `${name}: ${e.lastText}`).join("\n") ||
+    "(belum ada percakapan tercatat)";
+
+  try {
+    const decision = await aiInterpret(s, transcript, context);
+    if (decision.action === "send_message" && decision.to && decision.text) {
+      const entry = resolveChat(decision.to);
+      if (entry) {
+        try {
+          await waxumSendText(s, entry.jid, decision.text);
+          pushLog(`sent to ${decision.to}: ${decision.text}`, "system");
+        } catch (e) {
+          pushLog(`send failed: ${e}`, "system");
+        }
+      } else {
+        pushLog(`ai wanted to message unresolved contact "${decision.to}"`, "system");
+      }
+    }
+    pushLog(decision.reply, "in");
+    await speak(s, decision.reply);
+  } catch (e) {
+    pushLog(`ai request failed: ${e}`, "system");
+    await speak(s, "Modul AI tidak merespons.");
   }
 }
 

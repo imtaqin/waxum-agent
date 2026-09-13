@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Settings } from "../lib/types";
 import { waxumStatus } from "../lib/waxum";
+import { aiInterpret } from "../lib/ai";
 import PairingModal from "./PairingModal.vue";
 
 const props = defineProps<{ modelValue: Settings }>();
@@ -75,6 +76,19 @@ async function testElevenLabs() {
     testResult.value = "elevenlabs key ok";
   } catch (e) {
     testResult.value = `elevenlabs failed: ${e}`;
+  } finally {
+    testing.value = false;
+  }
+}
+
+async function testAi() {
+  testing.value = true;
+  testResult.value = null;
+  try {
+    const decision = await aiInterpret(form.value, "halo, tes koneksi", "(tidak ada konteks)");
+    testResult.value = `ai ok — reply: ${decision.reply}`;
+  } catch (e) {
+    testResult.value = `ai failed: ${e}`;
   } finally {
     testing.value = false;
   }
@@ -190,6 +204,29 @@ function save() {
       </label>
       <button class="btn-ghost" :disabled="testing" @click="testElevenLabs">
         {{ testing ? "Testing…" : "Test ElevenLabs key" }}
+      </button>
+
+      <div class="w-px h-px" />
+
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] uppercase tracking-wide text-hud-400/40">AI endpoint (OpenAI-compatible)</span>
+        <input v-model="form.aiApiUrl" class="input" placeholder="https://api.example.com/v1" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] uppercase tracking-wide text-hud-400/40">AI API key</span>
+        <input v-model="form.aiApiKey" type="password" class="input" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] uppercase tracking-wide text-hud-400/40">AI model</span>
+        <input v-model="form.aiModel" class="input" />
+      </label>
+      <p class="text-[11px] text-white/30 -mt-2">
+        Used only for free-form commands the fixed patterns don't match
+        (e.g. "halo ada pesan apa aja") — leave empty to keep the assistant
+        pattern-only.
+      </p>
+      <button class="btn-ghost" :disabled="testing" @click="testAi">
+        {{ testing ? "Testing…" : "Test AI connection" }}
       </button>
 
       <label class="flex items-center gap-2 text-sm text-white/70">

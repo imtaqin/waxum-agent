@@ -1,3 +1,4 @@
+mod ai;
 mod bundled;
 mod commands;
 mod download;
@@ -30,6 +31,7 @@ pub fn run() {
             commands::tts_speak,
             commands::stt_transcribe,
             commands::elevenlabs_check,
+            commands::ai_interpret,
             commands::bundled_start,
             commands::bundled_stop,
             commands::bundled_is_running,
