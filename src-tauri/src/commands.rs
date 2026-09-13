@@ -47,6 +47,16 @@ pub async fn waxum_chat_messages(
 }
 
 #[tauri::command]
+pub async fn waxum_session_messages(
+    base_url: String,
+    token: String,
+    session_id: String,
+    limit: u32,
+) -> AppResult<serde_json::Value> {
+    waxum::session_messages(&base_url, &token, &session_id, limit).await
+}
+
+#[tauri::command]
 pub async fn waxum_search(
     base_url: String,
     token: String,

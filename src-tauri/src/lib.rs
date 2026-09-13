@@ -23,6 +23,7 @@ pub fn run() {
             commands::waxum_list_sessions,
             commands::waxum_send_text,
             commands::waxum_chat_messages,
+            commands::waxum_session_messages,
             commands::waxum_search,
             commands::waxum_start_events,
             commands::waxum_stop_events,

@@ -88,6 +88,23 @@ pub async fn chat_messages(
     json_or_err(resp).await
 }
 
+/// Session-wide message history, newest first — used to prime the chat
+/// log/known-contacts map on connect instead of starting blank and only
+/// ever seeing messages that arrive after the app happens to be open.
+pub async fn session_messages(
+    base_url: &str,
+    token: &str,
+    session_id: &str,
+    limit: u32,
+) -> AppResult<Value> {
+    let url = format!(
+        "{}/sessions/{session_id}/messages?limit={limit}",
+        base_url.trim_end_matches('/')
+    );
+    let resp = auth(client().get(url), token).send().await?;
+    json_or_err(resp).await
+}
+
 pub async fn search_contact(
     base_url: &str,
     token: &str,

@@ -27,6 +27,15 @@ export function waxumSendText(s: Settings, to: string, text: string) {
   });
 }
 
+export function waxumSessionMessages(s: Settings, limit = 50) {
+  return invoke<any>("waxum_session_messages", {
+    baseUrl: s.baseUrl,
+    token: s.token,
+    sessionId: s.sessionId,
+    limit,
+  });
+}
+
 export function waxumChatMessages(s: Settings, chatJid: string, limit = 10) {
   return invoke<any>("waxum_chat_messages", {
     baseUrl: s.baseUrl,

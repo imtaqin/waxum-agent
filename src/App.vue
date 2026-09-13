@@ -12,6 +12,7 @@ import {
   startEventStream,
   stopEventStream,
   waxumSendText,
+  waxumSessionMessages,
   waxumStatus,
 } from "./lib/waxum";
 import { speak } from "./lib/voice";
@@ -42,9 +43,39 @@ const knownChats = reactive(new Map<string, { jid: string; lastText: string }>()
 let unlistenMessage: (() => void) | null = null;
 let unlistenStatus: (() => void) | null = null;
 
+/** message_id set shared between history load and live SSE, so a message
+ * that arrives while history is still loading (or gets fetched again on
+ * a reconnect) never shows up twice in the log. */
+const seenMessageIds = new Set<string>();
+let historyLoaded = false;
+
 function pushLog(text: string, kind: "in" | "out" | "system") {
   log.push({ id: crypto.randomUUID(), text, kind });
   if (log.length > 200) log.shift();
+}
+
+/** Primes knownChats/log from waxum's stored history — without this, the
+ * app starts blank and only ever "sees" messages that arrive after it
+ * happens to be open, so anything asked about past messages comes back
+ * empty even though waxum has been logging them the whole time. */
+async function loadHistory() {
+  if (historyLoaded) return;
+  const s = settings.value!;
+  try {
+    const res = await waxumSessionMessages(s, 50);
+    const messages = [...(res.messages ?? [])].reverse();
+    for (const m of messages) {
+      if (seenMessageIds.has(m.message_id)) continue;
+      seenMessageIds.add(m.message_id);
+      const name = m.push_name || m.chat_jid.split("@")[0];
+      const text = m.body || `[${m.msg_type}]`;
+      knownChats.set(name.toLowerCase(), { jid: m.chat_jid, lastText: text });
+      pushLog(`${name}: ${text}`, m.direction === "out" ? "out" : "in");
+    }
+    historyLoaded = true;
+  } catch (e) {
+    pushLog(`gagal memuat riwayat pesan: ${e}`, "system");
+  }
 }
 
 async function boot() {
@@ -100,6 +131,7 @@ async function refreshSessionStatus() {
     statusLine.value = sessionReady.value
       ? "connected — listening for messages"
       : `session not paired yet (status: ${status.status ?? "unknown"})`;
+    if (sessionReady.value) await loadHistory();
   } catch (e) {
     sessionReady.value = false;
     statusLine.value = `couldn't check session status: ${e}`;
@@ -125,6 +157,8 @@ function chatDisplayName(msg: IncomingMessage): string {
 
 async function handleIncoming(msg: IncomingMessage) {
   if (msg.data.is_from_me) return;
+  if (seenMessageIds.has(msg.data.message_id)) return;
+  seenMessageIds.add(msg.data.message_id);
   const name = chatDisplayName(msg);
   const text = msg.data.text || msg.data.caption || `[${msg.data.message_type}]`;
   knownChats.set(name.toLowerCase(), { jid: msg.data.chat, lastText: text });
