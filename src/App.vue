@@ -19,6 +19,7 @@ import {
 import { speak } from "./lib/voice";
 import { parseCommand } from "./lib/commandParser";
 import { aiConfigured, aiInterpret } from "./lib/ai";
+import { motion, AnimatePresence } from "motion-v";
 
 const ready = ref(false);
 const settings = ref<Settings | null>(null);
@@ -346,32 +347,45 @@ onUnmounted(() => {
         config
       </button>
     </header>
+    <div class="cyber-line hud-flicker" />
 
     <div
       class="px-4 py-1.5 text-[11px] border-b border-hud-500/10 uppercase tracking-wide"
-      :class="sessionReady ? 'text-hud-400/50' : 'text-amber-400'">
+      :class="sessionReady ? 'text-hud-400/50' : 'text-cyber-pink'">
       &gt; {{ statusLine }}
     </div>
 
-    <div v-if="!sessionReady" class="mx-4 mt-3 card p-3 flex items-center justify-between gap-3">
-      <p class="text-xs text-hud-400/70">
-        Sesi belum tertaut. Pindai kode QR untuk mengaktifkan modul WhatsApp.
-      </p>
-      <button class="btn-primary shrink-0 text-xs" @click="showPairing = true">Pair now</button>
-    </div>
+    <AnimatePresence>
+      <motion.div
+        v-if="!sessionReady"
+        :initial="{ opacity: 0, y: -8 }"
+        :animate="{ opacity: 1, y: 0 }"
+        :exit="{ opacity: 0, y: -8 }"
+        class="mx-4 mt-3 card p-3 flex items-center justify-between gap-3">
+        <p class="text-xs text-hud-400/70">
+          Sesi belum tertaut. Pindai kode QR untuk mengaktifkan modul WhatsApp.
+        </p>
+        <button class="btn-primary shrink-0 text-xs" @click="showPairing = true">Pair now</button>
+      </motion.div>
+    </AnimatePresence>
 
     <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-      <div
-        v-for="entry in log"
-        :key="entry.id"
-        class="max-w-[85%] px-3 py-2 rounded-xl text-sm font-mono"
-        :class="{
-          'self-start card text-hud-400/90': entry.kind === 'in',
-          'self-end bg-hud-600/70 text-charcoal-900 font-semibold': entry.kind === 'out',
-          'self-center text-[10px] uppercase tracking-wide text-hud-400/30': entry.kind === 'system',
-        }">
-        {{ entry.text }}
-      </div>
+      <AnimatePresence>
+        <motion.div
+          v-for="entry in log"
+          :key="entry.id"
+          :initial="{ opacity: 0, y: 12, scale: 0.97 }"
+          :animate="{ opacity: 1, y: 0, scale: 1 }"
+          :transition="{ duration: 0.2 }"
+          class="max-w-[85%] px-3 py-2 rounded-xl text-sm font-mono"
+          :class="{
+            'self-start card text-hud-400/90': entry.kind === 'in',
+            'self-end bg-hud-500 text-charcoal-900 font-semibold shadow-hud': entry.kind === 'out',
+            'self-center text-[10px] uppercase tracking-wide text-hud-400/30': entry.kind === 'system',
+          }">
+          {{ entry.text }}
+        </motion.div>
+      </AnimatePresence>
       <p v-if="log.length === 0 && sessionReady" class="text-center text-hud-400/30 text-xs mt-8 uppercase tracking-wide">
         Standby. Ucapkan "baca pesan" atau ketik perintah di bawah.
       </p>
@@ -383,7 +397,13 @@ onUnmounted(() => {
         class="input flex-1"
         placeholder="ketik perintah…"
         :disabled="!sessionReady" />
-      <button type="submit" class="btn-ghost shrink-0" :disabled="!sessionReady || !typedCommand.trim()">Send</button>
+      <motion.button
+        type="submit"
+        class="btn-ghost shrink-0"
+        :while-press="{ scale: 0.94 }"
+        :disabled="!sessionReady || !typedCommand.trim()">
+        Send
+      </motion.button>
     </form>
 
     <VoiceBar
@@ -392,12 +412,14 @@ onUnmounted(() => {
       @transcript="onTranscript"
       @error="(e) => pushLog(e, 'system')" />
 
-    <PairingModal
-      v-if="showPairing"
-      :base-url="settings!.baseUrl"
-      :token="settings!.token"
-      :session-id="settings!.sessionId"
-      @close="showPairing = false"
-      @paired="onPairedFromMain" />
+    <AnimatePresence>
+      <PairingModal
+        v-if="showPairing"
+        :base-url="settings!.baseUrl"
+        :token="settings!.token"
+        :session-id="settings!.sessionId"
+        @close="showPairing = false"
+        @paired="onPairedFromMain" />
+    </AnimatePresence>
   </div>
 </template>

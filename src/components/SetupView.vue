@@ -122,16 +122,16 @@ function save() {
         </div>
       </div>
 
-      <div class="flex gap-2 p-1 bg-white/[0.03] rounded-lg">
+      <div class="flex gap-2 p-1 bg-hud-500/5 rounded-lg">
         <button
           class="flex-1 text-xs py-1.5 rounded-md transition-colors"
-          :class="form.mode === 'remote' ? 'bg-emerald-600 text-white' : 'text-white/50'"
+          :class="form.mode === 'remote' ? 'bg-hud-500 text-charcoal-900' : 'text-hud-400/50'"
           @click="form.mode = 'remote'">
           Remote URL
         </button>
         <button
           class="flex-1 text-xs py-1.5 rounded-md transition-colors"
-          :class="form.mode === 'bundled' ? 'bg-emerald-600 text-white' : 'text-white/50'"
+          :class="form.mode === 'bundled' ? 'bg-hud-500 text-charcoal-900' : 'text-hud-400/50'"
           @click="form.mode = 'bundled'">
           Bundled binary
         </button>
@@ -139,18 +139,18 @@ function save() {
 
       <template v-if="form.mode === 'remote'">
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] uppercase tracking-wide text-white/40">waxum base URL</span>
+          <span class="text-[11px] uppercase tracking-wide text-hud-400/40">waxum base URL</span>
           <input v-model="form.baseUrl" class="input" placeholder="http://127.0.0.1:3451/api/v1" />
         </label>
       </template>
       <template v-else>
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] uppercase tracking-wide text-white/40">waxum binary path</span>
+          <span class="text-[11px] uppercase tracking-wide text-hud-400/40">waxum binary path</span>
           <div class="flex gap-2">
             <input v-model="form.bundledBinaryPath" class="input" placeholder="leave empty to auto-download" />
             <button class="btn-ghost shrink-0" :disabled="pickingBinary" @click="pickBinaryPath">Browse</button>
           </div>
-          <p class="text-[11px] text-white/30">
+          <p class="text-[11px] text-hud-400/30">
             Leave empty and waxum agent downloads the latest waxum release
             for your OS automatically the first time it connects.
           </p>
@@ -159,27 +159,27 @@ function save() {
           {{ downloading ? "Downloading…" : form.bundledBinaryPath ? "Re-download / update binary" : "Download waxum now" }}
         </button>
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] uppercase tracking-wide text-white/40">local port</span>
+          <span class="text-[11px] uppercase tracking-wide text-hud-400/40">local port</span>
           <input v-model="form.baseUrl" class="input" placeholder="http://127.0.0.1:3451/api/v1" />
         </label>
-        <p class="text-[11px] text-white/30 -mt-2">
+        <p class="text-[11px] text-hud-400/30 -mt-2">
           The bundled binary is launched on demand; base URL should point at
           its own <code>127.0.0.1:&lt;port&gt;/api/v1</code>.
         </p>
       </template>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] uppercase tracking-wide text-white/40">waxum bearer token</span>
+        <span class="text-[11px] uppercase tracking-wide text-hud-400/40">waxum bearer token</span>
         <input v-model="form.token" type="password" class="input" placeholder="superadmin or session token" />
       </label>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] uppercase tracking-wide text-white/40">session id (local only)</span>
+        <span class="text-[11px] uppercase tracking-wide text-hud-400/40">session id (local only)</span>
         <div class="flex gap-2">
           <input v-model="form.sessionId" class="input font-mono text-xs" placeholder="generated locally" />
           <button class="btn-ghost shrink-0 text-xs" @click="newSessionId">New</button>
         </div>
-        <p class="text-[11px] text-white/30">
+        <p class="text-[11px] text-hud-400/30">
           Generated on this device and never fetched from the server — this
           app never lists other sessions on a shared waxum instance.
         </p>
@@ -195,11 +195,11 @@ function save() {
       <div class="w-px h-px" />
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] uppercase tracking-wide text-white/40">ElevenLabs API key</span>
+        <span class="text-[11px] uppercase tracking-wide text-hud-400/40">ElevenLabs API key</span>
         <input v-model="form.elevenLabsApiKey" type="password" class="input" placeholder="sk_..." />
       </label>
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] uppercase tracking-wide text-white/40">ElevenLabs voice id</span>
+        <span class="text-[11px] uppercase tracking-wide text-hud-400/40">ElevenLabs voice id</span>
         <input v-model="form.elevenLabsVoiceId" class="input" />
       </label>
       <button class="btn-ghost" :disabled="testing" @click="testElevenLabs">
@@ -220,7 +220,7 @@ function save() {
         <span class="text-[11px] uppercase tracking-wide text-hud-400/40">AI model</span>
         <input v-model="form.aiModel" class="input" />
       </label>
-      <p class="text-[11px] text-white/30 -mt-2">
+      <p class="text-[11px] text-hud-400/30 -mt-2">
         Used only for free-form commands the fixed patterns don't match
         (e.g. "halo ada pesan apa aja") — leave empty to keep the assistant
         pattern-only.
@@ -229,12 +229,12 @@ function save() {
         {{ testing ? "Testing…" : "Test AI connection" }}
       </button>
 
-      <label class="flex items-center gap-2 text-sm text-white/70">
-        <input v-model="form.autoReadIncoming" type="checkbox" class="accent-emerald-500" />
+      <label class="flex items-center gap-2 text-sm text-hud-400/70">
+        <input v-model="form.autoReadIncoming" type="checkbox" class="accent-hud-500" />
         Read incoming messages aloud automatically
       </label>
 
-      <p v-if="testResult" class="text-xs" :class="testResult.startsWith('failed') ? 'text-red-400' : 'text-emerald-400'">
+      <p v-if="testResult" class="text-xs" :class="testResult.startsWith('failed') ? 'text-red-400' : 'text-hud-400'">
         {{ testResult }}
       </p>
 

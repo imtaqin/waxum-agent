@@ -15,10 +15,14 @@ export default {
           700: '#111827',
         },
         hud: {
-          400: '#5eead4',
-          500: '#22d3ee',
-          600: '#0891b2',
-          glow: '#67e8f9',
+          400: '#fde047',
+          500: '#facc15',
+          600: '#ca8a04',
+          glow: '#fef08a',
+        },
+        cyber: {
+          pink: '#ff2fb4',
+          cyan: '#22e5e5',
         },
       },
       fontFamily: {
@@ -26,8 +30,9 @@ export default {
         mono: ['Geist Mono', 'JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
-        hud: '0 0 0 1px rgba(34,211,238,0.25), 0 0 24px rgba(34,211,238,0.15)',
-        'hud-lg': '0 0 0 1px rgba(34,211,238,0.35), 0 0 48px rgba(34,211,238,0.25)',
+        hud: '0 0 0 1px rgba(250,204,21,0.3), 0 0 24px rgba(250,204,21,0.2)',
+        'hud-lg': '0 0 0 1px rgba(250,204,21,0.4), 0 0 48px rgba(250,204,21,0.3)',
+        cyber: '0 0 0 1px rgba(255,47,180,0.3), 0 0 20px rgba(255,47,180,0.25)',
       },
     },
   },
