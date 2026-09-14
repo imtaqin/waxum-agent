@@ -1,44 +1,62 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { motion, AnimatePresence } from "motion-v";
+import { motion } from "motion-v";
 
 const props = defineProps<{
   state: "offline" | "idle" | "listening" | "thinking" | "speaking";
 }>();
 
-type Expression = "closed" | "happy" | "wide" | "suspect" | "dizzy";
+const color = computed(() => (props.state === "offline" ? "#3a4a56" : "#22d3ee"));
 
-const expression = computed<Expression>(() => {
+/** One shape language for every expression — a filled crescent, varied
+ * only by curve depth/thickness/symmetry — instead of mixing strokes,
+ * circles and bars per state, which read as disjointed rather than one
+ * character with different expressions. */
+function crescent(curve: number, thickness: number, yBase = 26): string {
+  const x0 = 2;
+  const x1 = 38;
+  const cx = 20;
+  const topY = yBase - curve;
+  const innerY = topY + thickness;
+  return `M${x0} ${yBase} Q${cx} ${topY} ${x1} ${yBase} Q${cx} ${innerY} ${x0} ${yBase} Z`;
+}
+
+const HAPPY = { left: crescent(22, 14), right: crescent(22, 14) };
+const LISTEN = { left: crescent(18, 18), right: crescent(18, 18) };
+const SUSPECT = { left: crescent(20, 12), right: crescent(6, 7, 22) };
+const SPEAKING = HAPPY;
+const OFFLINE = { left: crescent(3, 6), right: crescent(3, 6) };
+
+const eyes = computed(() => {
   switch (props.state) {
-    case "offline":
-      return "closed";
     case "listening":
-      return "wide";
+      return LISTEN;
     case "thinking":
-      return "suspect";
+      return SUSPECT;
     case "speaking":
-      return "dizzy";
+      return SPEAKING;
+    case "offline":
+      return OFFLINE;
     default:
-      return "happy";
+      return HAPPY;
   }
 });
 
-const color = "#22d3ee";
+const breathe = computed(() => props.state !== "offline");
 
-// Occasional blink layered on top of whatever expression is active, so
-// the face reads as alive even sitting idle — like the reference sheet's
-// "blink" state cycling in over "happy".
+// A random blink layered over whichever expression is active, so the
+// face reads as alive at rest instead of only reacting to state changes.
 const blinking = ref(false);
 let blinkTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleBlink() {
-  const delay = 2500 + Math.random() * 3500;
+  const delay = 2800 + Math.random() * 3200;
   blinkTimer = setTimeout(() => {
-    blinking.value = true;
+    if (props.state !== "offline") blinking.value = true;
     setTimeout(() => {
       blinking.value = false;
       scheduleBlink();
-    }, 140);
+    }, 120);
   }, delay);
 }
 
@@ -49,89 +67,73 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative w-full max-w-[200px] mx-auto aspect-square">
+  <motion.div
+    class="relative w-full max-w-[188px] mx-auto aspect-square"
+    :animate="breathe ? { scale: [1, 1.02, 1] } : { scale: 1 }"
+    :transition="{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }">
     <div
-      class="absolute inset-0 rounded-[28%] border-4"
+      class="absolute inset-0 rounded-[30%] transition-shadow duration-500"
       :style="{
-        borderColor: state === 'offline' ? '#3a4a56' : '#8a97a3',
-        backgroundColor: '#050607',
-        boxShadow: state === 'offline' ? 'none' : `0 0 24px ${color}33`,
+        background: 'radial-gradient(circle at 50% 38%, #0c0f10 0%, #050607 75%)',
+        border: `3px solid ${state === 'offline' ? '#2a343d' : '#95a2ad'}`,
+        boxShadow: state === 'offline'
+          ? 'inset 0 0 20px rgba(0,0,0,0.6)'
+          : `inset 0 0 20px rgba(0,0,0,0.6), 0 0 26px ${color}40`,
       }" />
+    <div class="absolute inset-[6%] rounded-[26%] border border-white/5 pointer-events-none" />
 
-    <div class="absolute inset-0 flex items-center justify-center gap-[14%]">
-      <AnimatePresence mode="wait">
+    <div class="absolute inset-0 flex items-center justify-center gap-[9%]">
         <motion.div
           v-if="blinking"
           key="blink"
-          :initial="{ opacity: 0 }"
-          :animate="{ opacity: 1 }"
-          :exit="{ opacity: 0 }"
-          class="flex gap-[14%]">
-          <div class="w-[22%] h-[4%] rounded-full" :style="{ backgroundColor: color }" />
-          <div class="w-[22%] h-[4%] rounded-full" :style="{ backgroundColor: color }" />
+          :initial="{ opacity: 0, scaleY: 0.3 }"
+          :animate="{ opacity: 1, scaleY: 1 }"
+          :transition="{ duration: 0.1 }"
+          class="flex gap-[9%]">
+          <div class="w-[26%] h-[5%] rounded-full" :style="{ backgroundColor: color }" />
+          <div class="w-[26%] h-[5%] rounded-full" :style="{ backgroundColor: color }" />
         </motion.div>
 
         <motion.div
           v-else
-          :key="expression"
-          :initial="{ opacity: 0, scale: 0.85 }"
-          :animate="{ opacity: 1, scale: 1 }"
-          :exit="{ opacity: 0, scale: 0.85 }"
-          :transition="{ duration: 0.25 }"
-          class="flex items-center gap-[10%]">
-          <!-- happy / idle: soft downward arcs -->
-          <template v-if="expression === 'happy'">
-            <svg viewBox="0 0 40 30" class="w-[26%]"><path d="M2 26 Q20 2 38 26" fill="none" :stroke="color" stroke-width="8" stroke-linecap="round" /></svg>
-            <svg viewBox="0 0 40 30" class="w-[26%]"><path d="M2 26 Q20 2 38 26" fill="none" :stroke="color" stroke-width="8" stroke-linecap="round" /></svg>
-          </template>
-
-          <!-- listening: wide, round, attentive -->
-          <template v-else-if="expression === 'wide'">
-            <motion.div
-              class="w-[24%] aspect-square rounded-full"
-              :style="{ backgroundColor: color }"
-              :animate="{ scale: [1, 1.08, 1] }"
-              :transition="{ duration: 1, repeat: Infinity, ease: 'easeInOut' }" />
-            <motion.div
-              class="w-[24%] aspect-square rounded-full"
-              :style="{ backgroundColor: color }"
-              :animate="{ scale: [1, 1.08, 1] }"
-              :transition="{ duration: 1, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }" />
-          </template>
-
-          <!-- thinking: one eye narrowed, asymmetric ("suspect") -->
-          <template v-else-if="expression === 'suspect'">
-            <svg viewBox="0 0 40 30" class="w-[26%]"><path d="M2 22 Q20 4 38 22" fill="none" :stroke="color" stroke-width="8" stroke-linecap="round" /></svg>
-            <svg viewBox="0 0 40 30" class="w-[26%]"><path d="M4 16 H36" fill="none" :stroke="color" stroke-width="8" stroke-linecap="round" /></svg>
-          </template>
-
-          <!-- speaking: eyes bounce like a talk-animation, offset phase -->
-          <template v-else-if="expression === 'dizzy'">
-            <motion.svg
-              viewBox="0 0 40 30"
-              class="w-[26%]"
-              :animate="{ scaleY: [1, 0.4, 1, 0.7, 1] }"
-              :transition="{ duration: 0.6, repeat: Infinity, ease: 'easeInOut' }"
-              style="transform-origin: center">
-              <path d="M2 26 Q20 2 38 26" fill="none" :stroke="color" stroke-width="8" stroke-linecap="round" />
-            </motion.svg>
-            <motion.svg
-              viewBox="0 0 40 30"
-              class="w-[26%]"
-              :animate="{ scaleY: [1, 0.7, 1, 0.4, 1] }"
-              :transition="{ duration: 0.6, repeat: Infinity, ease: 'easeInOut', delay: 0.1 }"
-              style="transform-origin: center">
-              <path d="M2 26 Q20 2 38 26" fill="none" :stroke="color" stroke-width="8" stroke-linecap="round" />
-            </motion.svg>
-          </template>
-
-          <!-- offline: flat, closed -->
-          <template v-else>
-            <div class="w-[22%] h-[4%] rounded-full bg-[#3a4a56]" />
-            <div class="w-[22%] h-[4%] rounded-full bg-[#3a4a56]" />
-          </template>
+          :key="state"
+          :initial="false"
+          :animate="{ scale: [0.92, 1] }"
+          :transition="{ duration: 0.22, ease: 'easeOut' }"
+          class="flex items-center gap-[9%] w-[84%]">
+          <motion.svg
+            viewBox="0 0 40 30"
+            class="w-1/2"
+            :animate="state === 'listening'
+              ? { scale: [1, 1.06, 1] }
+              : state === 'speaking'
+                ? { scaleY: [1, 0.45, 1, 0.7, 1] }
+                : { scale: 1 }"
+            :transition="state === 'listening'
+              ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' }
+              : state === 'speaking'
+                ? { duration: 0.55, repeat: Infinity, ease: 'easeInOut' }
+                : { duration: 0.3 }"
+            style="transform-origin: center">
+            <path :d="eyes.left" :fill="color" :style="{ filter: state === 'offline' ? 'none' : `drop-shadow(0 0 3px ${color})` }" />
+          </motion.svg>
+          <motion.svg
+            viewBox="0 0 40 30"
+            class="w-1/2"
+            :animate="state === 'listening'
+              ? { scale: [1, 1.06, 1] }
+              : state === 'speaking'
+                ? { scaleY: [1, 0.7, 1, 0.45, 1] }
+                : { scale: 1 }"
+            :transition="state === 'listening'
+              ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }
+              : state === 'speaking'
+                ? { duration: 0.55, repeat: Infinity, ease: 'easeInOut', delay: 0.08 }
+                : { duration: 0.3 }"
+            style="transform-origin: center">
+            <path :d="eyes.right" :fill="color" :style="{ filter: state === 'offline' ? 'none' : `drop-shadow(0 0 3px ${color})` }" />
+          </motion.svg>
         </motion.div>
-      </AnimatePresence>
     </div>
-  </div>
+  </motion.div>
 </template>
