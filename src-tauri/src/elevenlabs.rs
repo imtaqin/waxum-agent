@@ -91,10 +91,12 @@ pub async fn mint_realtime_token(api_key: &str) -> AppResult<String> {
     let resp = client()
         .post(format!("{API_BASE}/single-use-token/realtime_scribe"))
         .header("xi-api-key", api_key)
-        // The proxy in front of this endpoint 411s a bodyless POST (no
-        // Content-Length header) -- an explicit empty body forces reqwest
-        // to send one.
-        .body("")
+        // The proxy in front of this endpoint 411s a bodyless POST --
+        // and reqwest does NOT add a Content-Length header on its own
+        // for an empty body (verified: .body("") alone still 411s). The
+        // header has to be set explicitly.
+        .header("Content-Length", "0")
+        .body(Vec::<u8>::new())
         .send()
         .await?;
     if !resp.status().is_success() {
