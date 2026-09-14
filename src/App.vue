@@ -5,7 +5,7 @@ import SetupView from "./components/SetupView.vue";
 import VoiceBar from "./components/VoiceBar.vue";
 import PairingModal from "./components/PairingModal.vue";
 import LiveClock from "./components/LiveClock.vue";
-import CoreReactor from "./components/CoreReactor.vue";
+import RobotFace from "./components/RobotFace.vue";
 import { loadSettings, saveSettings } from "./lib/settings";
 import type { IncomingMessage, Settings } from "./lib/types";
 import {
@@ -32,7 +32,7 @@ const sessionReady = ref(false);
 const showPairing = ref(false);
 const typedCommand = ref("");
 
-/** Drives CoreReactor: offline (no session) -> idle/listening (voice bar
+/** Drives RobotFace: offline (no session) -> idle/listening (voice bar
  * mic state) -> thinking/speaking (transient, while a command/AI call or
  * TTS playback is in flight), then back to idle/listening. */
 const listening = ref(false);
@@ -377,7 +377,7 @@ onUnmounted(() => {
     <div class="cyber-line hud-flicker" />
 
     <div class="shrink-0 pt-4 pb-2 flex flex-col items-center">
-      <CoreReactor :state="assistantState" />
+      <RobotFace :state="assistantState" />
       <div
         class="mt-2 text-[10px] uppercase tracking-wide max-w-[85%] text-center truncate"
         :class="sessionReady ? 'text-hud-400/50' : 'text-cyber-pink'">
@@ -450,7 +450,7 @@ onUnmounted(() => {
 
     <VoiceBar
       :settings="settings!"
-      :busy="busy || !sessionReady"
+      :active="sessionReady && !busy"
       @transcript="onTranscript"
       @error="(e) => pushLog(e, 'system')"
       @listening="onListeningChange" />
