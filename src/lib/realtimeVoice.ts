@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { Settings } from "./types";
 
 export type RealtimeEvent =
@@ -13,11 +14,12 @@ export type RealtimeEvent =
  * the server's VAD decides when an utterance ends and commits a
  * transcript, instead of push-to-talk's record-then-upload cycle.
  *
- * Browsers cannot set custom headers on a WebSocket handshake, so the
- * key goes in the connection URL's query string rather than the
- * `xi-api-key` header the REST endpoints use — acceptable for a local
- * desktop app talking directly to ElevenLabs, not something to do from
- * a page anyone else can load.
+ * The realtime socket rejects a raw `xi-api-key` outright, on the query
+ * string or as a header — confirmed against the live endpoint, it always
+ * answers with an `auth_error` frame. It only accepts a short-lived
+ * single-use token minted via `POST /v1/single-use-token/realtime_scribe`,
+ * so `start()` asks the Rust side to mint one (keeping the real API key
+ * out of the websocket URL entirely) before opening the connection.
  */
 export class RealtimeVoice {
   private ws: WebSocket | null = null;
@@ -29,9 +31,12 @@ export class RealtimeVoice {
   private readonly sampleRate = 16000;
 
   async start(settings: Settings, onEvent: (e: RealtimeEvent) => void): Promise<void> {
+    const token = await invoke<string>("elevenlabs_mint_realtime_token", {
+      apiKey: settings.elevenLabsApiKey,
+    });
     const url =
       `wss://api.elevenlabs.io/v1/speech-to-text/realtime` +
-      `?xi-api-key=${encodeURIComponent(settings.elevenLabsApiKey)}` +
+      `?token=${encodeURIComponent(token)}` +
       `&sample_rate=${this.sampleRate}&commit_strategy=vad`;
     const ws = new WebSocket(url);
     this.ws = ws;

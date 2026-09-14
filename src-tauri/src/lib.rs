@@ -41,6 +41,7 @@ pub fn run() {
             commands::tts_speak,
             commands::stt_transcribe,
             commands::elevenlabs_check,
+            commands::elevenlabs_mint_realtime_token,
             commands::ai_interpret,
             commands::bundled_start,
             commands::bundled_stop,

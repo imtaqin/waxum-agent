@@ -114,6 +114,11 @@ pub async fn elevenlabs_check(api_key: String) -> AppResult<serde_json::Value> {
 }
 
 #[tauri::command]
+pub async fn elevenlabs_mint_realtime_token(api_key: String) -> AppResult<String> {
+    elevenlabs::mint_realtime_token(&api_key).await
+}
+
+#[tauri::command]
 pub async fn ai_interpret(
     api_url: String,
     api_key: String,

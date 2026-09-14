@@ -80,6 +80,38 @@ pub async fn transcribe(api_key: &str, audio_base64: &str, mime_type: &str) -> A
         .ok_or_else(|| AppError::ElevenLabs("STT response missing text field".into()))
 }
 
+/// Mints a short-lived single-use token for realtime STT
+/// (`wss://.../speech-to-text/realtime`) — that socket rejects a raw
+/// `xi-api-key` outright (confirmed against the live endpoint: it always
+/// replies `auth_error`, header or query param, no exceptions), it only
+/// accepts one of these tokens as a `token` query param. Minted here
+/// (Rust) rather than the frontend so the real API key never has to touch
+/// a websocket URL string. Expires after 15 minutes / first use.
+pub async fn mint_realtime_token(api_key: &str) -> AppResult<String> {
+    let resp = client()
+        .post(format!("{API_BASE}/single-use-token/realtime_scribe"))
+        .header("xi-api-key", api_key)
+        // The proxy in front of this endpoint 411s a bodyless POST (no
+        // Content-Length header) -- an explicit empty body forces reqwest
+        // to send one.
+        .body("")
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::ElevenLabs(format!(
+            "minting realtime token: HTTP {status}: {body}"
+        )));
+    }
+    let value: serde_json::Value = resp.json().await?;
+    value
+        .get("token")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| AppError::ElevenLabs("token response missing token field".into()))
+}
+
 /// Verifies the key works and returns the raw subscription payload, used by
 /// the settings screen's "Test connection" button.
 pub async fn check_subscription(api_key: &str) -> AppResult<serde_json::Value> {
