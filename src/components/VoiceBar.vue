@@ -4,7 +4,7 @@ import { motion } from "motion-v";
 import type { Settings } from "../lib/types";
 import { RealtimeVoice } from "../lib/realtimeVoice";
 
-const props = defineProps<{ settings: Settings; active: boolean }>();
+const props = defineProps<{ settings: Settings; active: boolean; speaking: boolean }>();
 const emit = defineEmits<{
   transcript: [string];
   error: [string];
@@ -17,6 +17,24 @@ const partial = ref("");
 let realtime: RealtimeVoice | null = null;
 
 watch(listening, (v) => emit("listening", v));
+
+// Half-duplex turn-taking, same as Gemini/ChatGPT voice mode: suspend
+// sending mic audio while the assistant is talking, otherwise it hears
+// its own TTS out of the speakers and transcribes it as a new command
+// -- a "talking to itself" loop, not a conversation.
+watch(
+  () => props.speaking,
+  (v) => {
+    if (v) {
+      realtime?.setSuspended(true);
+    } else {
+      // Small grace period before resuming — the room's speaker output
+      // hasn't fully decayed the instant playback "ends" in JS, and the
+      // mic would otherwise catch the tail of the assistant's own voice.
+      setTimeout(() => realtime?.setSuspended(false), 400);
+    }
+  },
+);
 
 // Fully automatic — starts as soon as the session is ready, stops the
 // moment it isn't (or the user mutes it). No push-to-talk, no button to
@@ -50,6 +68,7 @@ async function start() {
         partial.value = "";
       }
     });
+    realtime.setSuspended(props.speaking);
     listening.value = true;
   } catch (e) {
     emit("error", `realtime connect failed: ${e}`);

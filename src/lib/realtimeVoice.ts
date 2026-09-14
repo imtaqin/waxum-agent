@@ -30,6 +30,18 @@ export class RealtimeVoice {
   private stream: MediaStream | null = null;
   private readonly sampleRate = 16000;
 
+  /** True while the assistant's own TTS is playing — audio capture keeps
+   * running (so the websocket doesn't idle-timeout) but chunks are not
+   * sent, otherwise the mic hears the assistant's own voice out of the
+   * speakers and transcribes it as a new command, which is exactly the
+   * "talking to itself" loop this exists to prevent. Real voice-mode
+   * assistants (Gemini, ChatGPT) do the same half-duplex turn-taking. */
+  private suspended = false;
+
+  setSuspended(value: boolean): void {
+    this.suspended = value;
+  }
+
   async start(settings: Settings, onEvent: (e: RealtimeEvent) => void): Promise<void> {
     const token = await invoke<string>("elevenlabs_mint_realtime_token", {
       apiKey: settings.elevenLabsApiKey,
@@ -76,7 +88,7 @@ export class RealtimeVoice {
     this.mute.gain.value = 0;
 
     this.processor.onaudioprocess = (e) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.suspended) return;
       const input = e.inputBuffer.getChannelData(0);
       const audioBase64 = downsampleAndEncode(input, audioCtx.sampleRate, this.sampleRate);
       this.ws.send(

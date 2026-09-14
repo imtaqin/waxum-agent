@@ -258,13 +258,23 @@ function resolveChat(spokenName: string): ChatEntry | undefined {
   return undefined;
 }
 
+/** Every transcript goes to the AI when one is configured — a real
+ * conversation, not a command matcher that dead-ends into "perintah
+ * tidak dikenali" the moment a phrase doesn't fit a fixed pattern. The
+ * regex patterns in commandParser.ts only cover for a session with no
+ * AI key set, as a degraded fallback rather than the primary path. */
 async function onTranscript(raw: string) {
   pushLog(raw, "out");
   const s = settings.value;
   if (!s) return;
   transientState.value = "thinking";
-  const intent = parseCommand(raw);
 
+  if (aiConfigured(s)) {
+    await handleWithAi(s, raw);
+    return;
+  }
+
+  const intent = parseCommand(raw);
   switch (intent.kind) {
     case "read_latest": {
       const entry = intent.from ? resolveChat(intent.from) : [...knownChats.values()].at(-1);
@@ -296,7 +306,8 @@ async function onTranscript(raw: string) {
       await speakState(s, `${knownChats.size} percakapan aktif terdeteksi.`);
       break;
     case "unknown":
-      await handleWithAi(s, intent.raw);
+      pushLog(`unrecognized command: "${intent.raw}"`, "system");
+      await speakState(s, "Perintah tidak dikenali. Atur AI di pengaturan untuk mode obrolan bebas.");
       break;
   }
 }
@@ -451,6 +462,7 @@ onUnmounted(() => {
     <VoiceBar
       :settings="settings!"
       :active="sessionReady && !busy"
+      :speaking="transientState === 'speaking'"
       @transcript="onTranscript"
       @error="(e) => pushLog(e, 'system')"
       @listening="onListeningChange" />
