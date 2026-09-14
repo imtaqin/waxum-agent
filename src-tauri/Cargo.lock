@@ -4709,6 +4709,7 @@ dependencies = [
  "base64 0.22.1",
  "flate2",
  "futures-util",
+ "gtk",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -4721,6 +4722,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tokio-stream",
+ "webkit2gtk",
  "zip",
 ]
 

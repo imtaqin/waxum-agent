@@ -5,11 +5,13 @@ mod download;
 mod elevenlabs;
 mod error;
 mod events;
+mod linux_media;
 mod pairing;
 mod state;
 mod waxum;
 
 use state::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,6 +20,12 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                linux_media::allow_user_media(&window);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::waxum_status,
             commands::waxum_list_sessions,

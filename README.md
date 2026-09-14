@@ -78,6 +78,23 @@ sudo dnf install webkit2gtk4.1-devel libsoup3-devel gtk3-devel librsvg2-devel   
 sudo apt install libwebkit2gtk-4.1-dev libsoup-3.0-dev libgtk-3-dev librsvg2-dev  # Debian/Ubuntu
 ```
 
+### Microphone access (Linux)
+
+WebKitGTK ships media streams disabled by default and never shows a
+native permission prompt — every `getUserMedia()` call fails with
+`NotAllowedError` unless the app explicitly enables it. `linux_media.rs`
+handles this (enables `enable-media-stream`/`enable-webaudio` and
+auto-allows `UserMediaPermissionRequest` on the WebView), no user
+action needed. If the mic still doesn't capture anything after that
+(silent audio, `OverconstrainedError`), it's GStreamer, not
+permissions — the WebKit web process needs the `base`/`good` plugins
+and PipeWire's GStreamer integration installed:
+
+```bash
+sudo dnf install gstreamer1-plugins-base gstreamer1-plugins-good pipewire-gstreamer   # Fedora
+sudo apt install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire  # Debian/Ubuntu
+```
+
 ## Notes / known limitations (v1)
 
 - The command parser is a fixed set of Indonesian regex patterns
@@ -91,3 +108,10 @@ sudo apt install libwebkit2gtk-4.1-dev libsoup-3.0-dev libgtk-3-dev librsvg2-dev
 - Auto-reconnect and backoff on the SSE stream is handled Rust-side
   (`events.rs`); the bundled-binary process is not auto-restarted if it
   crashes — restart it from settings.
+- `linux_media.rs` only fixes microphone access on Linux. macOS's
+  WKWebView has its own separate, still-unresolved mic permission bug
+  in wry ([wry#1195](https://github.com/tauri-apps/wry/issues/1195),
+  [tauri#11951](https://github.com/tauri-apps/tauri/issues/11951)) —
+  `NSMicrophoneUsageDescription` alone is not enough; expect to need a
+  similar manual workaround if voice input doesn't work on macOS.
+  Windows (WebView2) prompts natively, no extra code needed.
