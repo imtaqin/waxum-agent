@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import SetupView from "./components/SetupView.vue";
 import VoiceBar from "./components/VoiceBar.vue";
 import PairingModal from "./components/PairingModal.vue";
-import RadarRing from "./components/RadarRing.vue";
 import LiveClock from "./components/LiveClock.vue";
+import CoreReactor from "./components/CoreReactor.vue";
 import { loadSettings, saveSettings } from "./lib/settings";
 import type { IncomingMessage, Settings } from "./lib/types";
 import {
@@ -32,13 +32,33 @@ const sessionReady = ref(false);
 const showPairing = ref(false);
 const typedCommand = ref("");
 
+/** Drives CoreReactor: offline (no session) -> idle/listening (voice bar
+ * mic state) -> thinking/speaking (transient, while a command/AI call or
+ * TTS playback is in flight), then back to idle/listening. */
+const listening = ref(false);
+const transientState = ref<"thinking" | "speaking" | null>(null);
+const assistantState = computed<"offline" | "idle" | "listening" | "thinking" | "speaking">(() => {
+  if (!sessionReady.value) return "offline";
+  if (transientState.value) return transientState.value;
+  return listening.value ? "listening" : "idle";
+});
+
+async function speakState(s: Settings, text: string) {
+  transientState.value = "speaking";
+  try {
+    await speak(s, text);
+  } finally {
+    transientState.value = null;
+  }
+}
+
 function submitTyped() {
   const text = typedCommand.value.trim();
   if (!text) return;
   typedCommand.value = "";
   onTranscript(text);
 }
-const log = reactive<{ id: string; text: string; kind: "in" | "out" | "system" }[]>([]);
+const log = reactive<{ id: string; text: string; kind: "in" | "out" | "system"; time: string }[]>([]);
 
 /** chat display name -> jid, learned from every incoming SSE message so
  * voice commands can say "balas ke budi" instead of a raw JID. */
@@ -87,7 +107,8 @@ const seenMessageIds = new Set<string>();
 let historyLoaded = false;
 
 function pushLog(text: string, kind: "in" | "out" | "system") {
-  log.push({ id: crypto.randomUUID(), text, kind });
+  const time = new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  log.push({ id: crypto.randomUUID(), text, kind, time });
   if (log.length > 200) log.shift();
 }
 
@@ -182,6 +203,10 @@ async function refreshSessionStatus() {
   }
 }
 
+function onListeningChange(v: boolean) {
+  listening.value = v;
+}
+
 function onPairedFromMain() {
   showPairing.value = false;
   refreshSessionStatus();
@@ -220,7 +245,7 @@ async function handleIncoming(msg: IncomingMessage) {
   pushLog(logLine, "in");
 
   if (settings.value?.autoReadIncoming) {
-    await speak(settings.value, spoken).catch((e) => pushLog(`tts failed: ${e}`, "system"));
+    await speakState(settings.value, spoken).catch((e) => pushLog(`tts failed: ${e}`, "system"));
   }
 }
 
@@ -237,37 +262,38 @@ async function onTranscript(raw: string) {
   pushLog(raw, "out");
   const s = settings.value;
   if (!s) return;
+  transientState.value = "thinking";
   const intent = parseCommand(raw);
 
   switch (intent.kind) {
     case "read_latest": {
       const entry = intent.from ? resolveChat(intent.from) : [...knownChats.values()].at(-1);
       if (!entry) {
-        await speak(s, "Tidak ada pesan yang sesuai dalam basis data.");
+        await speakState(s, "Tidak ada pesan yang sesuai dalam basis data.");
         break;
       }
-      await speak(s, entry.messages.at(-1) ?? "Tidak ada isi pesan.");
+      await speakState(s, entry.messages.at(-1) ?? "Tidak ada isi pesan.");
       break;
     }
     case "send_message": {
       const entry = resolveChat(intent.to);
       if (!entry) {
-        await speak(s, `Kontak ${intent.to} tidak ditemukan dalam percakapan aktif.`);
+        await speakState(s, `Kontak ${intent.to} tidak ditemukan dalam percakapan aktif.`);
         pushLog(`unresolved contact: "${intent.to}"`, "system");
         break;
       }
       try {
         await waxumSendText(s, entry.jid, intent.text);
         pushLog(`sent to ${intent.to}: ${intent.text}`, "system");
-        await speak(s, `Pesan telah dikirim kepada ${intent.to}.`);
+        await speakState(s, `Pesan telah dikirim kepada ${intent.to}.`);
       } catch (e) {
-        await speak(s, "Pengiriman pesan gagal.");
+        await speakState(s, "Pengiriman pesan gagal.");
         pushLog(`send failed: ${e}`, "system");
       }
       break;
     }
     case "list_sessions":
-      await speak(s, `${knownChats.size} percakapan aktif terdeteksi.`);
+      await speakState(s, `${knownChats.size} percakapan aktif terdeteksi.`);
       break;
     case "unknown":
       await handleWithAi(s, intent.raw);
@@ -282,7 +308,7 @@ async function onTranscript(raw: string) {
 async function handleWithAi(s: Settings, transcript: string) {
   if (!aiConfigured(s)) {
     pushLog(`unrecognized command: "${transcript}"`, "system");
-    await speak(s, "Perintah tidak dikenali.");
+    await speakState(s, "Perintah tidak dikenali.");
     return;
   }
   const context =
@@ -306,10 +332,10 @@ async function handleWithAi(s: Settings, transcript: string) {
       }
     }
     pushLog(decision.reply, "in");
-    await speak(s, decision.reply);
+    await speakState(s, decision.reply);
   } catch (e) {
     pushLog(`ai request failed: ${e}`, "system");
-    await speak(s, "Modul AI tidak merespons.");
+    await speakState(s, "Modul AI tidak merespons.");
   }
 }
 
@@ -335,19 +361,13 @@ onUnmounted(() => {
     :model-value="settings!"
     @save="onSaveSettings" />
 
-  <div v-else class="h-screen flex flex-col hud-frame">
+  <div v-else class="h-screen flex flex-col hud-frame overflow-hidden">
     <span class="hud-corner-tr" />
     <span class="hud-corner-br" />
 
-    <header class="flex items-center justify-between px-4 h-14 border-b border-hud-500/20 shrink-0 bg-black/20">
-      <div class="flex items-center gap-2">
-        <RadarRing :active="sessionReady" />
-        <div>
-          <div class="text-sm font-semibold tracking-[0.2em] uppercase hud-glow-text">waxum // agent</div>
-          <div class="text-[9px] uppercase tracking-widest text-hud-400/30">jarvis-class voice interface</div>
-        </div>
-      </div>
-      <div class="flex items-center gap-4">
+    <header class="flex items-center justify-between px-4 h-11 shrink-0">
+      <div class="text-[10px] font-semibold tracking-[0.3em] uppercase hud-glow-text">waxum // agent</div>
+      <div class="flex items-center gap-3">
         <LiveClock />
         <button class="text-[10px] uppercase tracking-widest text-hud-400/50 hover:text-hud-400" @click="showSettings = true">
           config
@@ -356,10 +376,13 @@ onUnmounted(() => {
     </header>
     <div class="cyber-line hud-flicker" />
 
-    <div
-      class="px-4 py-1.5 text-[11px] border-b border-hud-500/10 uppercase tracking-wide"
-      :class="sessionReady ? 'text-hud-400/50' : 'text-cyber-pink'">
-      &gt; {{ statusLine }}
+    <div class="shrink-0 pt-4 pb-2 flex flex-col items-center">
+      <CoreReactor :state="assistantState" />
+      <div
+        class="mt-2 text-[10px] uppercase tracking-wide max-w-[85%] text-center truncate"
+        :class="sessionReady ? 'text-hud-400/50' : 'text-cyber-pink'">
+        &gt; {{ statusLine }}
+      </div>
     </div>
 
     <AnimatePresence>
@@ -368,7 +391,7 @@ onUnmounted(() => {
         :initial="{ opacity: 0, y: -8 }"
         :animate="{ opacity: 1, y: 0 }"
         :exit="{ opacity: 0, y: -8 }"
-        class="mx-4 mt-3 card p-3 flex items-center justify-between gap-3">
+        class="mx-4 mb-2 card p-3 flex items-center justify-between gap-3 shrink-0">
         <p class="text-xs text-hud-400/70">
           Sesi belum tertaut. Pindai kode QR untuk mengaktifkan modul WhatsApp.
         </p>
@@ -376,29 +399,41 @@ onUnmounted(() => {
       </motion.div>
     </AnimatePresence>
 
-    <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+    <div class="cyber-line" />
+    <main class="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-1.5 font-mono text-xs">
       <AnimatePresence>
         <motion.div
           v-for="entry in log"
           :key="entry.id"
-          :initial="{ opacity: 0, y: 12, scale: 0.97 }"
-          :animate="{ opacity: 1, y: 0, scale: 1 }"
-          :transition="{ duration: 0.2 }"
-          class="max-w-[85%] px-3 py-2 rounded-xl text-sm font-mono"
+          :initial="{ opacity: 0, x: -8 }"
+          :animate="{ opacity: 1, x: 0 }"
+          :transition="{ duration: 0.18 }"
+          class="flex gap-2 items-baseline"
           :class="{
-            'self-start card text-hud-400/90': entry.kind === 'in',
-            'self-end bg-hud-500 text-charcoal-900 font-semibold shadow-hud': entry.kind === 'out',
-            'self-center text-[10px] uppercase tracking-wide text-hud-400/30': entry.kind === 'system',
+            'text-hud-300': entry.kind === 'in',
+            'text-hud-500/80': entry.kind === 'out',
+            'text-hud-400/25 text-[10px]': entry.kind === 'system',
           }">
-          {{ entry.text }}
+          <span class="text-hud-400/30 shrink-0 tabular-nums">{{ entry.time }}</span>
+          <span
+            class="shrink-0 uppercase tracking-wide"
+            :class="{
+              'text-cyber-pink/70': entry.kind === 'in',
+              'text-hud-500': entry.kind === 'out',
+              'opacity-0 w-0': entry.kind === 'system',
+            }">
+            {{ entry.kind === 'in' ? '< RX' : entry.kind === 'out' ? '> TX' : '' }}
+          </span>
+          <span class="min-w-0 break-words">{{ entry.text }}</span>
         </motion.div>
       </AnimatePresence>
-      <p v-if="log.length === 0 && sessionReady" class="text-center text-hud-400/30 text-xs mt-8 uppercase tracking-wide">
+      <p v-if="log.length === 0 && sessionReady" class="text-center text-hud-400/30 text-xs mt-6 uppercase tracking-wide">
         Standby. Ucapkan "baca pesan" atau ketik perintah di bawah.
       </p>
     </main>
+    <div class="cyber-line" />
 
-    <form class="flex gap-2 px-4 pt-2" @submit.prevent="submitTyped">
+    <form class="flex gap-2 px-4 pt-2 shrink-0" @submit.prevent="submitTyped">
       <input
         v-model="typedCommand"
         class="input flex-1"
@@ -417,7 +452,8 @@ onUnmounted(() => {
       :settings="settings!"
       :busy="busy || !sessionReady"
       @transcript="onTranscript"
-      @error="(e) => pushLog(e, 'system')" />
+      @error="(e) => pushLog(e, 'system')"
+      @listening="onListeningChange" />
 
     <AnimatePresence>
       <PairingModal
