@@ -89,7 +89,7 @@ function close() {
         menunggu kode…
       </div>
 
-      <p class="text-xs text-center" :class="failed ? 'text-cyber-pink' : 'text-hud-400/60'">
+      <p class="text-xs text-center" :class="failed ? 'text-red-400' : 'text-hud-400/60'">
         {{ statusText }}
       </p>
 

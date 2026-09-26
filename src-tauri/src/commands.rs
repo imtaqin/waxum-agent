@@ -129,6 +129,46 @@ pub async fn ai_interpret(
     ai::interpret(&api_url, &api_key, &model, &transcript, &context).await
 }
 
+#[derive(serde::Deserialize)]
+pub struct AiConverseArgs {
+    api_url: String,
+    api_key: String,
+    model: String,
+    transcript: String,
+    contacts: Vec<ai::ContactInfo>,
+    base_url: String,
+    token: String,
+    session_id: String,
+}
+
+#[tauri::command]
+pub async fn ai_converse(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: AiConverseArgs,
+) -> AppResult<String> {
+    let mut history = state.ai_history.lock().await;
+    let req = ai::ConverseRequest {
+        api_url: args.api_url,
+        api_key: args.api_key,
+        model: args.model,
+        transcript: args.transcript,
+        contacts: args.contacts,
+        waxum_target: ai::WaxumTarget {
+            base_url: args.base_url,
+            token: args.token,
+            session_id: args.session_id,
+        },
+    };
+    ai::converse(&app, req, &mut history).await
+}
+
+#[tauri::command]
+pub async fn ai_reset_conversation(state: State<'_, AppState>) -> AppResult<()> {
+    state.ai_history.lock().await.clear();
+    Ok(())
+}
+
 /// Starts the bundled waxum process. When `binary_path` is empty, auto
 /// downloads the latest release for this OS/arch first — "bundled mode"
 /// should not require the user to go find a binary themselves.

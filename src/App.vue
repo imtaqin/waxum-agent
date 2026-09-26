@@ -20,7 +20,7 @@ import {
 } from "./lib/waxum";
 import { speak } from "./lib/voice";
 import { parseCommand } from "./lib/commandParser";
-import { aiConfigured, aiInterpret } from "./lib/ai";
+import { aiConfigured, aiConverse, onAiStream, onAiTool, type AiContact } from "./lib/ai";
 import { motion, AnimatePresence } from "motion-v";
 
 const ready = ref(false);
@@ -37,6 +37,10 @@ const typedCommand = ref("");
  * TTS playback is in flight), then back to idle/listening. */
 const listening = ref(false);
 const transientState = ref<"thinking" | "speaking" | null>(null);
+/** Filled chunk-by-chunk from ai-stream events while the AI reply is being
+ * generated, so the UI shows progress instead of a dead "thinking" state
+ * for however long the full completion takes. */
+const streamingReply = ref("");
 const assistantState = computed<"offline" | "idle" | "listening" | "thinking" | "speaking">(() => {
   if (!sessionReady.value) return "offline";
   if (transientState.value) return transientState.value;
@@ -99,6 +103,8 @@ async function resolveGroupName(jid: string): Promise<string> {
 
 let unlistenMessage: (() => void) | null = null;
 let unlistenStatus: (() => void) | null = null;
+let unlistenAiStream: (() => void) | null = null;
+let unlistenAiTool: (() => void) | null = null;
 
 /** message_id set shared between history load and live SSE, so a message
  * that arrives while history is still loading (or gets fetched again on
@@ -258,15 +264,57 @@ function resolveChat(spokenName: string): ChatEntry | undefined {
   return undefined;
 }
 
-/** Every transcript goes to the AI when one is configured — a real
- * conversation, not a command matcher that dead-ends into "perintah
- * tidak dikenali" the moment a phrase doesn't fit a fixed pattern. The
- * regex patterns in commandParser.ts only cover for a session with no
- * AI key set, as a degraded fallback rather than the primary path. */
+/** Wake-word gate, Siri/Alexa-style: the realtime mic is always
+ * transcribing (see RealtimeVoice), but a transcript only reaches the
+ * command pipeline if it opens with "Hey Jarvis" (plus the handful of
+ * variants STT tends to mishear it as). Hearing the wake word triggers a
+ * short spoken ack and opens an `AWAKE_WINDOW_MS` window during which the
+ * NEXT transcript is treated as the actual command -- a two-step
+ * wake-then-listen flow, not a single "wake word + command" sentence. */
+const WAKE_WORDS = ["hey jarvis", "hei jarvis", "hai jarvis", "ok jarvis", "oke jarvis"];
+const AWAKE_WINDOW_MS = 8000;
+const awaitingCommand = ref(false);
+let awakeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function matchWakeWord(text: string): boolean {
+  const norm = text.trim().toLowerCase().replace(/[.,!?]/g, "");
+  return WAKE_WORDS.some((w) => norm === w || norm.startsWith(`${w} `) || norm.includes(` ${w}`));
+}
+
+function clearAwakeTimer() {
+  if (awakeTimer) {
+    clearTimeout(awakeTimer);
+    awakeTimer = null;
+  }
+}
+
 async function onTranscript(raw: string) {
-  pushLog(raw, "out");
   const s = settings.value;
   if (!s) return;
+
+  if (!awaitingCommand.value) {
+    if (!matchWakeWord(raw)) return; // ignored -- no wake word, not a command attempt
+    pushLog(raw, "out");
+    pushLog('wake word terdeteksi, menunggu perintah…', "system");
+    await speakState(s, "Ya?");
+    awaitingCommand.value = true;
+    clearAwakeTimer();
+    awakeTimer = setTimeout(() => {
+      awaitingCommand.value = false;
+      pushLog("tidak ada perintah, kembali standby.", "system");
+    }, AWAKE_WINDOW_MS);
+    return;
+  }
+
+  clearAwakeTimer();
+  awaitingCommand.value = false;
+  await processCommand(s, raw);
+}
+
+/** The actual command pipeline, run once a transcript arrives inside the
+ * awake window -- unchanged from before the wake-word gate was added. */
+async function processCommand(s: Settings, raw: string) {
+  pushLog(raw, "out");
   transientState.value = "thinking";
 
   if (aiConfigured(s)) {
@@ -314,37 +362,32 @@ async function onTranscript(raw: string) {
 
 /** Fallback for anything the fixed regex patterns don't cover — free-form
  * questions like "halo ada pesan apa aja" have no fixed shape, so this
- * hands the transcript plus known-chat context to the configured LLM and
- * either executes the send it decides on or just speaks its reply. */
+ * hands the transcript to the configured LLM as a real conversation turn.
+ * Contact resolution and the actual send now happen server-side via the
+ * model's own search_contact/send_message tool calls — this side no longer
+ * decides who "Randy" is with a substring check, it just hands over the
+ * known contacts as searchable data and speaks whatever the model settles
+ * on. Reply streams in live (see onAiStream below) before this resolves. */
 async function handleWithAi(s: Settings, transcript: string) {
   if (!aiConfigured(s)) {
     pushLog(`unrecognized command: "${transcript}"`, "system");
     await speakState(s, "Perintah tidak dikenali.");
     return;
   }
-  const context =
-    [...knownChats.entries()]
-      .map(([name, e]) => `## ${name}\n${e.messages.join("\n")}`)
-      .join("\n\n") || "(belum ada percakapan tercatat)";
+  const contacts: AiContact[] = [...knownChats.entries()].map(([name, e]) => ({
+    name,
+    jid: e.jid,
+    recent: e.messages,
+  }));
 
+  streamingReply.value = "";
   try {
-    const decision = await aiInterpret(s, transcript, context);
-    if (decision.action === "send_message" && decision.to && decision.text) {
-      const entry = resolveChat(decision.to);
-      if (entry) {
-        try {
-          await waxumSendText(s, entry.jid, decision.text);
-          pushLog(`sent to ${decision.to}: ${decision.text}`, "system");
-        } catch (e) {
-          pushLog(`send failed: ${e}`, "system");
-        }
-      } else {
-        pushLog(`ai wanted to message unresolved contact "${decision.to}"`, "system");
-      }
-    }
-    pushLog(decision.reply, "in");
-    await speakState(s, decision.reply);
+    const reply = await aiConverse(s, transcript, contacts);
+    streamingReply.value = "";
+    pushLog(reply, "in");
+    await speakState(s, reply);
   } catch (e) {
+    streamingReply.value = "";
     pushLog(`ai request failed: ${e}`, "system");
     await speakState(s, "Modul AI tidak merespons.");
   }
@@ -354,11 +397,20 @@ onMounted(async () => {
   await boot();
   unlistenMessage = await onIncomingMessage(handleIncoming);
   unlistenStatus = await onStreamStatus((m) => (statusLine.value = m));
+  unlistenAiStream = await onAiStream((chunk) => {
+    streamingReply.value += chunk;
+  });
+  unlistenAiTool = await onAiTool((call) => {
+    pushLog(`ai tool: ${call.name}(${JSON.stringify(call.arguments)})`, "system");
+  });
 });
 
 onUnmounted(() => {
   unlistenMessage?.();
   unlistenStatus?.();
+  unlistenAiStream?.();
+  unlistenAiTool?.();
+  clearAwakeTimer();
 });
 </script>
 
@@ -385,7 +437,7 @@ onUnmounted(() => {
         </button>
       </div>
     </header>
-    <div class="cyber-line hud-flicker" />
+    <div class="cyber-line" />
 
     <div class="shrink-0 pt-4 pb-2 flex flex-col items-center">
       <RobotFace :state="assistantState" />
@@ -393,6 +445,9 @@ onUnmounted(() => {
         class="mt-2 text-[10px] uppercase tracking-wide max-w-[85%] text-center truncate"
         :class="sessionReady ? 'text-hud-400/50' : 'text-cyber-pink'">
         &gt; {{ statusLine }}
+      </div>
+      <div v-if="awaitingCommand" class="mt-1 text-[9px] uppercase tracking-widest text-cyber-pink hud-glow-text">
+        mendengarkan perintah…
       </div>
     </div>
 
@@ -440,6 +495,10 @@ onUnmounted(() => {
       </AnimatePresence>
       <p v-if="log.length === 0 && sessionReady" class="text-center text-hud-400/30 text-xs mt-6 uppercase tracking-wide">
         Standby. Ucapkan "baca pesan" atau ketik perintah di bawah.
+      </p>
+      <p v-if="streamingReply" class="flex gap-2 items-baseline text-hud-300/70 italic">
+        <span class="text-hud-400/30 shrink-0 uppercase tracking-wide text-[10px]">…</span>
+        <span class="min-w-0 break-words">{{ streamingReply }}</span>
       </p>
     </main>
     <div class="cyber-line" />

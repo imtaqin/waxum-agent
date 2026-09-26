@@ -43,6 +43,8 @@ pub fn run() {
             commands::elevenlabs_check,
             commands::elevenlabs_mint_realtime_token,
             commands::ai_interpret,
+            commands::ai_converse,
+            commands::ai_reset_conversation,
             commands::bundled_start,
             commands::bundled_stop,
             commands::bundled_is_running,

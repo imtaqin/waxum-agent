@@ -26,7 +26,14 @@ pub async fn start(
         }
         *guard = Some(stop_tx);
     }
-    tokio::spawn(run(app, base_url, token, session_id, timeout_seconds, stop_rx));
+    tokio::spawn(run(
+        app,
+        base_url,
+        token,
+        session_id,
+        timeout_seconds,
+        stop_rx,
+    ));
 }
 
 pub async fn stop(state: tauri::State<'_, AppState>) {
@@ -59,7 +66,11 @@ async fn run(
     let resp = match resp {
         Ok(r) if r.status().is_success() => r,
         Ok(r) => {
-            emit(&app, "error", &format!(r#"{{"message":"HTTP {}"}}"#, r.status()));
+            emit(
+                &app,
+                "error",
+                &format!(r#"{{"message":"HTTP {}"}}"#, r.status()),
+            );
             return;
         }
         Err(e) => {

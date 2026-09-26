@@ -22,8 +22,8 @@ export default {
           glow: '#a5f3fc',
         },
         cyber: {
-          pink: '#ff2fb4',
-          amber: '#ffb020',
+          pink: '#6d8cff',
+          amber: '#e0a940',
         },
         void: {
           900: '#050b14',

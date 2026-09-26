@@ -37,7 +37,10 @@ pub struct SessionSummary {
 }
 
 pub async fn session_status(base_url: &str, token: &str, session_id: &str) -> AppResult<Value> {
-    let url = format!("{}/sessions/{session_id}/status", base_url.trim_end_matches('/'));
+    let url = format!(
+        "{}/sessions/{session_id}/status",
+        base_url.trim_end_matches('/')
+    );
     let resp = auth(client().get(url), token).send().await?;
     json_or_err(resp).await
 }

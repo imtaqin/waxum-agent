@@ -75,14 +75,20 @@ pub async fn download_latest_forced(app: &AppHandle) -> AppResult<String> {
     Ok(target.to_string_lossy().into_owned())
 }
 
-async fn download_latest(app: &AppHandle, dir: &std::path::Path, target: &std::path::Path) -> AppResult<()> {
+async fn download_latest(
+    app: &AppHandle,
+    dir: &std::path::Path,
+    target: &std::path::Path,
+) -> AppResult<()> {
     let suffix = asset_suffix()?;
     let client = reqwest::Client::builder()
         .user_agent("waxum-agent")
         .build()?;
 
     let release: Release = client
-        .get(format!("https://api.github.com/repos/{REPO}/releases/latest"))
+        .get(format!(
+            "https://api.github.com/repos/{REPO}/releases/latest"
+        ))
         .send()
         .await?
         .error_for_status()
