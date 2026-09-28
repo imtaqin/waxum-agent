@@ -24,6 +24,50 @@ fn client() -> reqwest::Client {
         .expect("reqwest client")
 }
 
+/// Validates the AI settings before any request is built. Without this, an
+/// empty or scheme-less API URL (e.g. a fresh install whose Settings were
+/// never filled in, or `api.openai.com/v1`) or a key pasted with a
+/// trailing newline makes reqwest fail with a bare "builder error" that
+/// doesn't say which field is wrong. Returns the full completions URL and
+/// the trimmed key and model.
+fn checked_ai_settings<'a>(
+    api_url: &str,
+    api_key: &'a str,
+    model: &'a str,
+) -> AppResult<(reqwest::Url, &'a str, &'a str)> {
+    let base = api_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err(AppError::Ai(
+            "AI API URL is empty; set it in Settings, e.g. https://api.openai.com/v1".into(),
+        ));
+    }
+    if !(base.starts_with("https://") || base.starts_with("http://")) {
+        return Err(AppError::Ai(format!(
+            "AI API URL must start with https:// (got \"{base}\")"
+        )));
+    }
+    let url = reqwest::Url::parse(&format!("{base}/chat/completions"))
+        .map_err(|e| AppError::Ai(format!("AI API URL is not valid: {e}")))?;
+
+    let key = api_key.trim();
+    if key.is_empty() {
+        return Err(AppError::Ai(
+            "AI API key is empty; set it in Settings".into(),
+        ));
+    }
+    if key.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(AppError::Ai(
+            "AI API key contains spaces or line breaks; paste it again without them".into(),
+        ));
+    }
+
+    let model = model.trim();
+    if model.is_empty() {
+        return Err(AppError::Ai("AI model is empty; set it in Settings".into()));
+    }
+    Ok((url, key, model))
+}
+
 /// Asks the model to decide whether the transcript wants a WhatsApp
 /// message sent, and to produce a short spoken reply either way. `context`
 /// is a plain-text summary of known chats/last messages the frontend
@@ -39,6 +83,7 @@ pub async fn interpret(
     transcript: &str,
     context: &str,
 ) -> AppResult<serde_json::Value> {
+    let (url, api_key, model) = checked_ai_settings(api_url, api_key, model)?;
     let system = format!(
         "Kamu adalah Waxum Agent, asisten eksekutif profesional untuk WhatsApp. Jawab selalu \
          dalam Bahasa Indonesia yang formal, presisi, dan ringkas -- gaya seperti asisten AI \
@@ -60,10 +105,7 @@ pub async fn interpret(
     });
 
     let resp = client()
-        .post(format!(
-            "{}/chat/completions",
-            api_url.trim_end_matches('/')
-        ))
+        .post(url)
         .bearer_auth(api_key)
         .json(&body)
         .send()
@@ -309,6 +351,7 @@ async fn stream_completion(
     messages: &[serde_json::Value],
     tools: Option<&serde_json::Value>,
 ) -> AppResult<StreamOutcome> {
+    let (url, api_key, model) = checked_ai_settings(api_url, api_key, model)?;
     let mut body = serde_json::json!({
         "model": model,
         "messages": messages,
@@ -320,10 +363,7 @@ async fn stream_completion(
     }
 
     let resp = client()
-        .post(format!(
-            "{}/chat/completions",
-            api_url.trim_end_matches('/')
-        ))
+        .post(url)
         .bearer_auth(api_key)
         .json(&body)
         .send()
@@ -514,4 +554,38 @@ pub async fn converse(
 
     let _ = app.emit("waxum-agent://ai-done", &final_reply);
     Ok(final_reply)
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::checked_ai_settings;
+
+    #[test]
+    fn a_valid_setup_builds_the_completions_url() {
+        let (url, key, model) =
+            checked_ai_settings(" https://api.example.com/v1/ ", " sk-abc\n", " gpt ").unwrap();
+        assert_eq!(url.as_str(), "https://api.example.com/v1/chat/completions");
+        assert_eq!(key, "sk-abc");
+        assert_eq!(model, "gpt");
+    }
+
+    #[test]
+    fn empty_or_scheme_less_urls_are_named_not_builder_errors() {
+        let empty = checked_ai_settings("", "k", "m").unwrap_err().to_string();
+        assert!(empty.contains("AI API URL is empty"), "{empty}");
+        let bare = checked_ai_settings("api.openai.com/v1", "k", "m")
+            .unwrap_err()
+            .to_string();
+        assert!(bare.contains("must start with https://"), "{bare}");
+    }
+
+    #[test]
+    fn keys_with_line_breaks_or_spaces_and_empty_models_are_rejected() {
+        let nl = checked_ai_settings("https://x/v1", "sk-a\nb", "m")
+            .unwrap_err()
+            .to_string();
+        assert!(nl.contains("spaces or line breaks"), "{nl}");
+        assert!(checked_ai_settings("https://x/v1", "  ", "m").is_err());
+        assert!(checked_ai_settings("https://x/v1", "k", " ").is_err());
+    }
 }
