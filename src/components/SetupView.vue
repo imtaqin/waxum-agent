@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type { Settings } from "../lib/types";
 import { waxumStatus } from "../lib/waxum";
 import { aiInterpret } from "../lib/ai";
+import { isMobile, launchBundled } from "../lib/bundled";
 import PairingModal from "./PairingModal.vue";
 import RadarRing from "./RadarRing.vue";
 
@@ -13,6 +14,33 @@ const emit = defineEmits<{ save: [Settings] }>();
 
 const form = ref<Settings>({ ...props.modelValue });
 if (!form.value.sessionId) form.value.sessionId = crypto.randomUUID();
+if (isMobile && form.value.mode === "bundled") form.value.mode = "remote";
+
+const launching = ref(false);
+const bundledStatus = ref<string | null>(null);
+
+/** In bundled mode, starts the in-app waxum (if needed) and fills in its
+ * URL and token before anything talks to it. */
+async function ensureBundled(): Promise<boolean> {
+  if (form.value.mode !== "bundled") return true;
+  launching.value = true;
+  bundledStatus.value = "starting waxum (first run downloads it)…";
+  try {
+    const info = await launchBundled(form.value);
+    bundledStatus.value = `running on 127.0.0.1:${info.port}`;
+    return true;
+  } catch (e) {
+    bundledStatus.value = null;
+    testResult.value = `failed: couldn't start waxum — ${e}`;
+    return false;
+  } finally {
+    launching.value = false;
+  }
+}
+
+async function openPairing() {
+  if (await ensureBundled()) showPairing.value = true;
+}
 
 const testing = ref(false);
 const testResult = ref<string | null>(null);
@@ -34,11 +62,10 @@ async function downloadNow() {
   downloading.value = true;
   testResult.value = null;
   try {
-    const path = await invoke<string>(
-      form.value.bundledBinaryPath ? "bundled_update_binary" : "bundled_ensure_binary",
-    );
-    form.value.bundledBinaryPath = path;
-    testResult.value = `downloaded to ${path}`;
+    const path = await invoke<string>("bundled_update_binary");
+    await invoke("bundled_stop");
+    bundledStatus.value = null;
+    testResult.value = `updated — ${path}; waxum restarts on next connect`;
   } catch (e) {
     testResult.value = `download failed: ${e}`;
   } finally {
@@ -53,12 +80,15 @@ async function testWaxum() {
   testing.value = true;
   testResult.value = null;
   try {
+    if (!(await ensureBundled())) return;
     const status = await waxumStatus(form.value);
     testResult.value = `ok — status: ${status.status ?? "unknown"}`;
   } catch (e) {
     const msg = String(e);
     if (msg.includes("HTTP 401")) {
-      testResult.value = "failed: token rejected — check base URL/token";
+      testResult.value = form.value.mode === "bundled"
+        ? "failed: token rejected — restart the app to relaunch waxum"
+        : "failed: token rejected — check base URL/token";
     } else if (msg.includes("HTTP 503") || msg.includes("HTTP 404")) {
       testResult.value = "reachable — token ok, session not paired yet (use Pair below)";
     } else {
@@ -121,7 +151,7 @@ function save() {
         </div>
       </div>
 
-      <div class="flex gap-2 p-1 bg-hud-500/5 rounded-lg">
+      <div v-if="!isMobile" class="flex gap-2 p-1 bg-hud-500/5 rounded-lg">
         <button
           class="flex-1 text-xs py-1.5 rounded-md transition-colors"
           :class="form.mode === 'remote' ? 'bg-hud-500 text-charcoal-900' : 'text-hud-400/50'"
@@ -132,7 +162,7 @@ function save() {
           class="flex-1 text-xs py-1.5 rounded-md transition-colors"
           :class="form.mode === 'bundled' ? 'bg-hud-500 text-charcoal-900' : 'text-hud-400/50'"
           @click="form.mode = 'bundled'">
-          Bundled binary
+          Built-in waxum
         </button>
       </div>
 
@@ -143,31 +173,33 @@ function save() {
         </label>
       </template>
       <template v-else>
-        <label class="flex flex-col gap-1">
-          <span class="text-[11px] uppercase tracking-wide text-hud-400/40">waxum binary path</span>
-          <div class="flex gap-2">
-            <input v-model="form.bundledBinaryPath" class="input" placeholder="leave empty to auto-download" />
-            <button class="btn-ghost shrink-0" :disabled="pickingBinary" @click="pickBinaryPath">Browse</button>
-          </div>
-          <p class="text-[11px] text-hud-400/30">
-            Leave empty and waxum agent downloads the latest waxum release
-            for your OS automatically the first time it connects.
-          </p>
-        </label>
-        <button class="btn-ghost" :disabled="downloading" @click="downloadNow">
-          {{ downloading ? "Downloading…" : form.bundledBinaryPath ? "Re-download / update binary" : "Download waxum now" }}
-        </button>
-        <label class="flex flex-col gap-1">
-          <span class="text-[11px] uppercase tracking-wide text-hud-400/40">local port</span>
-          <input v-model="form.baseUrl" class="input" placeholder="http://127.0.0.1:3451/api/v1" />
-        </label>
-        <p class="text-[11px] text-hud-400/30 -mt-2">
-          The bundled binary is launched on demand; base URL should point at
-          its own <code>127.0.0.1:&lt;port&gt;/api/v1</code>.
+        <p class="text-[11px] text-hud-400/50">
+          waxum runs inside this app. It is downloaded automatically the first
+          time, and its address and access token are set up for you — nothing
+          to install or type in.
         </p>
+        <button class="btn-ghost" :disabled="launching" @click="ensureBundled">
+          {{ launching ? "Starting…" : bundledStatus ? "waxum is running" : "Start waxum now" }}
+        </button>
+        <p v-if="bundledStatus" class="text-[11px] text-hud-400/70 -mt-2">{{ bundledStatus }}</p>
+        <details class="text-[11px] text-hud-400/40">
+          <summary class="cursor-pointer uppercase tracking-wide">Advanced</summary>
+          <div class="flex flex-col gap-2 mt-2">
+            <label class="flex flex-col gap-1">
+              <span class="uppercase tracking-wide">custom waxum binary (optional)</span>
+              <div class="flex gap-2">
+                <input v-model="form.bundledBinaryPath" class="input" placeholder="leave empty to use the downloaded one" />
+                <button class="btn-ghost shrink-0" :disabled="pickingBinary" @click="pickBinaryPath">Browse</button>
+              </div>
+            </label>
+            <button class="btn-ghost" :disabled="downloading" @click="downloadNow">
+              {{ downloading ? "Downloading…" : "Update waxum to the latest release" }}
+            </button>
+          </div>
+        </details>
       </template>
 
-      <label class="flex flex-col gap-1">
+      <label v-if="form.mode === 'remote'" class="flex flex-col gap-1">
         <span class="text-[11px] uppercase tracking-wide text-hud-400/40">waxum bearer token</span>
         <input v-model="form.token" type="password" class="input" placeholder="superadmin or session token" />
       </label>
@@ -188,7 +220,7 @@ function save() {
         <button class="btn-ghost flex-1" :disabled="testing" @click="testWaxum">
           {{ testing ? "Testing…" : "Test connection" }}
         </button>
-        <button class="btn-primary flex-1" @click="showPairing = true">Pair (scan QR)</button>
+        <button class="btn-primary flex-1" :disabled="launching" @click="openPairing">Pair (scan QR)</button>
       </div>
 
       <div class="w-px h-px" />

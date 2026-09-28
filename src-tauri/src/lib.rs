@@ -45,12 +45,18 @@ pub fn run() {
             commands::ai_interpret,
             commands::ai_converse,
             commands::ai_reset_conversation,
-            commands::bundled_start,
+            commands::bundled_launch,
             commands::bundled_stop,
             commands::bundled_is_running,
             commands::bundled_ensure_binary,
             commands::bundled_update_binary,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                let state = handle.state::<AppState>();
+                tauri::async_runtime::block_on(bundled::stop(&state.bundled_child)).ok();
+            }
+        });
 }

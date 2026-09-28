@@ -191,21 +191,15 @@ pub async fn waxum_stop_pairing(state: State<'_, AppState>) -> AppResult<()> {
     Ok(())
 }
 
+/// Starts (or returns the already running) in-app waxum, downloading it
+/// first if needed, and returns its URL and auto-generated token.
 #[tauri::command]
-pub async fn bundled_start(
+pub async fn bundled_launch(
     app: AppHandle,
     state: State<'_, AppState>,
-    binary_path: String,
-    port: u16,
-    env: Vec<(String, String)>,
-) -> AppResult<String> {
-    let resolved = if binary_path.trim().is_empty() {
-        download::ensure_binary(&app).await?
-    } else {
-        binary_path
-    };
-    bundled::start(&resolved, port, env, &state.bundled_child).await?;
-    Ok(resolved)
+    binary_path: Option<String>,
+) -> AppResult<bundled::LaunchInfo> {
+    bundled::launch(&app, &state.bundled_child, binary_path).await
 }
 
 #[tauri::command]

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
 import SetupView from "./components/SetupView.vue";
 import VoiceBar from "./components/VoiceBar.vue";
 import PairingModal from "./components/PairingModal.vue";
 import LiveClock from "./components/LiveClock.vue";
 import RobotFace from "./components/RobotFace.vue";
+import { launchBundled } from "./lib/bundled";
 import { loadSettings, saveSettings } from "./lib/settings";
 import type { IncomingMessage, Settings } from "./lib/types";
 import {
@@ -152,7 +152,7 @@ async function loadHistory() {
 async function boot() {
   settings.value = await loadSettings();
   const s = settings.value;
-  const configured = s.token && s.sessionId && (s.mode === "remote" ? s.baseUrl : true);
+  const configured = s.sessionId && (s.mode === "bundled" || (s.token && s.baseUrl));
   showSettings.value = !configured;
   ready.value = true;
   if (configured) await connect();
@@ -164,22 +164,9 @@ async function connect() {
   statusLine.value = "connecting…";
   try {
     if (s.mode === "bundled") {
-      const running = await invoke<boolean>("bundled_is_running");
-      if (!running) {
-        statusLine.value = s.bundledBinaryPath
-          ? "starting bundled waxum…"
-          : "downloading waxum binary…";
-        const resolvedPath = await invoke<string>("bundled_start", {
-          binaryPath: s.bundledBinaryPath,
-          port: 3451,
-          env: [],
-        });
-        if (resolvedPath !== s.bundledBinaryPath) {
-          s.bundledBinaryPath = resolvedPath;
-          await saveSettings(s);
-        }
-        await new Promise((r) => setTimeout(r, 1500));
-      }
+      statusLine.value = "starting waxum (first run downloads it)…";
+      await launchBundled(s);
+      await saveSettings(s);
     }
     await startEventStream(s);
     await refreshSessionStatus();
