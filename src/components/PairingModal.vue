@@ -17,17 +17,36 @@ async function renderQr(code: string) {
   qrDataUrl.value = await QRCode.toDataURL(code, { margin: 1, width: 240 });
 }
 
+// waxum streams the same envelope as its webhooks,
+// `{ session_id, event, timestamp, data: { code, ... } }`, so the fields live
+// one level down. The events synthesised in the app (`error` with a
+// `message`) are flat, hence the fallback.
+function eventBody(data: any): any {
+  return data?.data ?? data ?? {};
+}
+
 onMounted(async () => {
   unlisten = await onPairingEvent(async (e) => {
+    const body = eventBody(e.data);
     switch (e.event) {
       case "qr_code":
-        statusText.value = "pindai kode ini di WhatsApp > Perangkat Tertaut";
+        if (typeof body.code !== "string" || !body.code) {
+          statusText.value = "waxum sent a QR event without a code — update waxum and try again";
+          failed.value = true;
+          break;
+        }
         pairCode.value = null;
-        await renderQr(e.data.code);
+        try {
+          await renderQr(body.code);
+          statusText.value = "pindai kode ini di WhatsApp > Perangkat Tertaut";
+        } catch (err) {
+          statusText.value = `couldn't render the QR: ${err}`;
+          failed.value = true;
+        }
         break;
       case "pair_code":
         statusText.value = "masukkan kode ini di WhatsApp > Perangkat Tertaut";
-        pairCode.value = e.data.code;
+        pairCode.value = body.code ?? null;
         qrDataUrl.value = null;
         break;
       case "connected":
@@ -38,7 +57,7 @@ onMounted(async () => {
         emit("paired");
         break;
       case "error":
-        statusText.value = `pairing failed: ${e.data.message ?? e.data.reason ?? "unknown error"}`;
+        statusText.value = `pairing failed: ${e.data?.message ?? body.reason ?? "unknown error"}`;
         failed.value = true;
         break;
       case "timeout":
